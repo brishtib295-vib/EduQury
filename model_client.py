@@ -1,10 +1,15 @@
 """Mistral client utilities for EduQuery.
 
-Includes robust 429/5xx retry handling and lightweight local YouTube
-recommendations that do not make an extra Mistral API call.
+Presentation-ready version:
+- Fails fast on invalid credentials (401/403) instead of retrying.
+- Uses a short, web-safe retry policy for transient 429/5xx errors.
+- Honors Retry-After but caps waiting time so Gunicorn workers do not time out.
+- Caches embeddings in-process to reduce repeated API calls during a demo.
+- Provides local YouTube search recommendations without an extra LLM call.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import random
 import re
@@ -26,11 +31,32 @@ MISTRAL_EMBED_URL = "https://api.mistral.ai/v1/embeddings"
 LLM_MODEL = os.getenv("LLM_MODEL", "mistral-small-latest")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "mistral-embed")
 
-MAX_RETRIES = 4
-INITIAL_BACKOFF = 3.0
-MAX_BACKOFF = 30.0
+# Safe defaults for a synchronous Flask/Gunicorn demo.
+# One retry is enough to survive a transient 429 without creating a 30–60s request.
+MAX_RETRIES = int(os.getenv("MISTRAL_MAX_RETRIES", "1"))
+INITIAL_BACKOFF = float(os.getenv("MISTRAL_INITIAL_BACKOFF", "2.0"))
+MAX_BACKOFF = float(os.getenv("MISTRAL_MAX_BACKOFF", "6.0"))
+DEFAULT_TIMEOUT = int(os.getenv("MISTRAL_TIMEOUT", "45"))
 
 _session: Optional[requests.Session] = None
+_embedding_cache: dict[str, List[float]] = {}
+_EMBED_CACHE_LIMIT = 800
+
+
+class MistralRateLimitError(RuntimeError):
+    """Raised when Mistral returns HTTP 429 after the allowed retry(s)."""
+
+    def __init__(self, message: str = "Mistral API rate limit reached.", retry_after: Optional[float] = None):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+class MistralAPIError(RuntimeError):
+    """Raised for non-transient Mistral API failures."""
+
+    def __init__(self, status_code: int, message: str):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def _get_session() -> requests.Session:
@@ -47,18 +73,32 @@ def _auth_headers() -> dict:
     }
 
 
+def _safe_response_message(response: requests.Response) -> str:
+    try:
+        data = response.json()
+        if isinstance(data, dict):
+            err = data.get("message") or data.get("detail") or data.get("error")
+            if isinstance(err, dict):
+                err = err.get("message") or str(err)
+            if err:
+                return str(err)
+    except Exception:
+        pass
+    return response.text[:500].strip() or response.reason or "Unknown API error"
+
+
 def _retry_delay(response: Optional[requests.Response], attempt: int) -> float:
-    """Use Retry-After when available; otherwise exponential backoff + jitter."""
+    """Use Retry-After when present, but cap it for synchronous web requests."""
     if response is not None:
         retry_after = response.headers.get("Retry-After")
         if retry_after:
             try:
-                return min(MAX_BACKOFF, max(1.0, float(retry_after)))
+                return min(MAX_BACKOFF, max(0.5, float(retry_after)))
             except (TypeError, ValueError):
                 pass
 
     delay = min(MAX_BACKOFF, INITIAL_BACKOFF * (2 ** attempt))
-    return min(MAX_BACKOFF, delay + random.uniform(0.0, 0.75))
+    return min(MAX_BACKOFF, delay + random.uniform(0.0, 0.5))
 
 
 def _post_with_retries(
@@ -67,11 +107,12 @@ def _post_with_retries(
     timeout: int,
     operation: str,
 ) -> requests.Response:
-    """POST to Mistral; retry only transient rate/server/network failures."""
+    """POST to Mistral with web-safe transient retry handling."""
     sess = _get_session()
 
     for attempt in range(MAX_RETRIES + 1):
         response: Optional[requests.Response] = None
+
         try:
             response = sess.post(
                 url,
@@ -79,60 +120,69 @@ def _post_with_retries(
                 headers=_auth_headers(),
                 timeout=timeout,
             )
-
-            if response.ok:
-                return response
-
-            status = response.status_code
-
-            # 429 = rate limit; 5xx = transient server problem.
-            if status == 429 or 500 <= status < 600:
-                if attempt >= MAX_RETRIES:
-                    response.raise_for_status()
-
-                wait = _retry_delay(response, attempt)
-                if status == 429:
-                    print(
-                        f"⚠️ Mistral rate limit (429) during {operation}. "
-                        f"Retrying in {wait:.1f}s "
-                        f"(retry {attempt + 1}/{MAX_RETRIES})..."
-                    )
-                else:
-                    print(
-                        f"⚠️ Mistral server error ({status}) during {operation}. "
-                        f"Retrying in {wait:.1f}s "
-                        f"(retry {attempt + 1}/{MAX_RETRIES})..."
-                    )
-                time.sleep(wait)
-                continue
-
-            # 400/401/403/etc. are not fixed by retrying.
-            response.raise_for_status()
-
         except requests.RequestException as exc:
             if attempt >= MAX_RETRIES:
-                raise RuntimeError(
-                    f"Mistral {operation} failed after {MAX_RETRIES + 1} attempts: {exc}"
+                raise MistralAPIError(
+                    503,
+                    f"Mistral {operation} network error. Please try again in a moment."
                 ) from exc
+
+            wait = _retry_delay(None, attempt)
+            print(
+                f"⚠️ Network error during Mistral {operation}. "
+                f"Retrying in {wait:.1f}s ({attempt + 1}/{MAX_RETRIES})..."
+            )
+            time.sleep(wait)
+            continue
+
+        if response.ok:
+            return response
+
+        status = response.status_code
+
+        # Authentication/permission/bad-request errors must NOT be retried.
+        if status in (400, 401, 403, 404, 405, 406, 409, 413, 422):
+            message = _safe_response_message(response)
+            if status in (401, 403):
+                message = "Mistral API key was rejected. Check MISTRAL_API_KEY in Railway."
+            raise MistralAPIError(status, f"Mistral {operation} failed ({status}): {message}")
+
+        # Retry only transient rate/server errors.
+        if status == 429 or 500 <= status < 600:
+            if attempt >= MAX_RETRIES:
+                message = _safe_response_message(response)
+                if status == 429:
+                    raise MistralRateLimitError(
+                        "Mistral API rate limit reached. Please wait and try again.",
+                        retry_after=None,
+                    )
+                raise MistralAPIError(
+                    status,
+                    f"Mistral {operation} temporarily failed ({status}): {message}",
+                )
 
             wait = _retry_delay(response, attempt)
             print(
-                f"⚠️ Network error during Mistral {operation}. "
-                f"Retrying in {wait:.1f}s "
-                f"(retry {attempt + 1}/{MAX_RETRIES})..."
+                f"⚠️ Mistral {status} during {operation}. "
+                f"Retrying in {wait:.1f}s ({attempt + 1}/{MAX_RETRIES})..."
             )
             time.sleep(wait)
+            continue
 
-    raise RuntimeError(f"Mistral {operation} failed after retries.")
+        # Any other status is not safe to retry.
+        message = _safe_response_message(response)
+        raise MistralAPIError(status, f"Mistral {operation} failed ({status}): {message}")
+
+    raise MistralAPIError(503, f"Mistral {operation} failed after retries.")
 
 
 def chat(
     prompt: str,
     max_tokens: int = 512,
     temperature: float = 0.2,
-    timeout: int = 120,
+    timeout: int = DEFAULT_TIMEOUT,
 ) -> str:
-    """Send a prompt to Mistral Chat and return the response text."""
+    """Send a prompt to Mistral Chat and return response text."""
     payload = {
         "model": LLM_MODEL,
         "messages": [{"role": "user", "content": prompt}],
@@ -147,8 +197,9 @@ def chat(
     try:
         return response.json()["choices"][0]["message"]["content"]
     except (KeyError, TypeError, ValueError) as exc:
-        raise RuntimeError(
-            f"Unexpected Mistral chat response: {response.text[:500]}"
+        raise MistralAPIError(
+            502,
+            f"Unexpected Mistral chat response: {response.text[:500]}",
         ) from exc
 
 
@@ -167,38 +218,67 @@ def _chunk_iterable(iterable: Iterable, size: int):
         yield chunk
 
 
+def _embedding_key(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def generate_embeddings(
     texts: List[str], batch_size: int = 32
 ) -> List[List[float]]:
-    """Return embeddings using Mistral's embedding API."""
+    """Return Mistral embeddings, reusing an in-process cache where possible."""
     if not texts:
         return []
 
-    all_embs: List[List[float]] = []
+    result: List[Optional[List[float]]] = [None] * len(texts)
+    missing_texts: List[str] = []
+    missing_positions: List[int] = []
 
-    for batch in _chunk_iterable(texts, batch_size):
-        payload = {"model": EMBED_MODEL, "input": batch}
-        response = _post_with_retries(
-            MISTRAL_EMBED_URL, payload, 60, "embeddings"
-        )
+    for i, text in enumerate(texts):
+        key = _embedding_key(text)
+        cached = _embedding_cache.get(key)
+        if cached is not None:
+            result[i] = cached
+        else:
+            missing_texts.append(text)
+            missing_positions.append(i)
 
-        try:
-            data = response.json()
-            batch_embs = [
-                item["embedding"]
-                for item in sorted(data["data"], key=lambda x: x["index"])
-            ]
-            all_embs.extend(batch_embs)
-        except (KeyError, TypeError, ValueError) as exc:
-            raise RuntimeError(
-                f"Unexpected Mistral embedding response: {response.text[:500]}"
-            ) from exc
+    if missing_texts:
+        for batch_start in range(0, len(missing_texts), batch_size):
+            batch = missing_texts[batch_start:batch_start + batch_size]
+            payload = {"model": EMBED_MODEL, "input": batch}
+            response = _post_with_retries(
+                MISTRAL_EMBED_URL, payload, 60, "embeddings"
+            )
 
-    return all_embs
+            try:
+                data = response.json()
+                batch_embs = [
+                    item["embedding"]
+                    for item in sorted(data["data"], key=lambda x: x["index"])
+                ]
+            except (KeyError, TypeError, ValueError) as exc:
+                raise MistralAPIError(
+                    502,
+                    f"Unexpected Mistral embedding response: {response.text[:500]}",
+                ) from exc
+
+            for local_idx, emb in enumerate(batch_embs):
+                global_missing_idx = batch_start + local_idx
+                if global_missing_idx >= len(missing_positions):
+                    break
+                original_idx = missing_positions[global_missing_idx]
+                result[original_idx] = emb
+
+                key = _embedding_key(texts[original_idx])
+                if len(_embedding_cache) >= _EMBED_CACHE_LIMIT:
+                    _embedding_cache.pop(next(iter(_embedding_cache)))
+                _embedding_cache[key] = emb
+
+    return [emb for emb in result if emb is not None]
 
 
 def embed_query(text: str) -> List[float]:
-    """Return an embedding for a single query string."""
+    """Return an embedding for one query, using the same cache."""
     if not text:
         return []
     result = generate_embeddings([text])
@@ -250,7 +330,6 @@ def _extract_topic_phrases(text: str, limit: int = 3) -> List[str]:
             if len(candidates) >= limit:
                 return candidates
 
-    # Fallback for short source text.
     for word in words:
         w = word.strip(".,-+#()[]{}").lower()
         if len(w) >= 5 and w not in _STOPWORDS and w not in [x.lower() for x in candidates]:
@@ -264,7 +343,7 @@ def _extract_topic_phrases(text: str, limit: int = 3) -> List[str]:
 def get_youtube_recommendations(
     source_text: str, limit: int = 3
 ) -> List[dict]:
-    """Return YouTube search recommendations without making an API/LLM call."""
+    """Return YouTube search recommendations without an extra API/LLM call."""
     topics = _extract_topic_phrases(source_text, limit=limit)
     return [
         {
@@ -277,16 +356,4 @@ def get_youtube_recommendations(
 
 
 if __name__ == "__main__":
-    print("Testing Mistral chat...")
-    print(chat("Hello! Explain RAG in simple words."))
-
-    print("\nTesting Mistral embeddings...")
-    vec = embed_query("machine learning")
-    print(f"Embedding dimensions: {len(vec)}")
-    print(f"First 5 values: {vec[:5]}")
-
-    print("\nTesting local YouTube recommendations...")
-    print(get_youtube_recommendations(
-        "Python exception handling try except finally functions",
-        limit=3,
-    ))
+    print("Mistral client ready.")
