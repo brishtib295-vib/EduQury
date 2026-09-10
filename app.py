@@ -1,5 +1,3 @@
-# app.py
-
 import os
 import io
 import json
@@ -29,7 +27,14 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # local model client & embeddings
-from model_client import chat as model_chat, generate_embeddings, embed_query
+from model_client import (
+    chat as model_chat,
+    generate_embeddings,
+    embed_query,
+    get_youtube_recommendations,
+    MistralRateLimitError,
+    MistralAPIError,
+)
 
 # pdf libs
 import pypdf
@@ -43,7 +48,22 @@ except ImportError:
 from PIL import Image
 
 # ── Load env early so MISTRAL_API_KEY is available for model_client ──────────
+
 load_dotenv()
+
+
+def _mistral_error_payload(exc):
+    """Return a safe, presentation-friendly API error payload."""
+    if isinstance(exc, MistralRateLimitError):
+        return {
+            "status": "error",
+            "error": "Mistral API rate limit reached. Please wait a moment and try again.",
+            "code": 429,
+        }
+    return {
+        "status": "error",
+        "error": str(exc),
+    }
 
 
 def get_youtube_metadata(url):
@@ -78,6 +98,8 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", uuid.uuid4().hex)
+# Keep uploads reasonable for a student-demo deployment.
+app.config["MAX_CONTENT_LENGTH"] = 15 * 1024 * 1024
 db = SQLAlchemy(app)
 
 # ── OCR — optional ────────────────────────────────────────────────────────────
@@ -524,7 +546,7 @@ Return ONLY valid JSON — no backticks, no extra text:
 
 Language: {language}
 """
-    raw = model_chat(prompt, max_tokens=1500, temperature=0.3)
+    raw = model_chat(prompt, max_tokens=1000, temperature=0.3)
     m = re.search(r"(\{[\s\S]*\}|\[[\s\S]*\])", raw)
     if m:
         try:
@@ -567,7 +589,7 @@ def generate_custom_questions():
     )
 
     try:
-        raw = model_chat(prompt, max_tokens=1500, temperature=0.4)
+        raw = model_chat(prompt, max_tokens=1000, temperature=0.4)
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
@@ -615,6 +637,8 @@ def _handle_chat_for_path(resolved_path: str, question: str, language: str):
         )
         raw = model_chat(prompt)
         return 200, {"status": "ok", "answer": raw}
+    except MistralRateLimitError as e:
+        return 429, _mistral_error_payload(e)
     except Exception as e:
         current_app.logger.exception("Error in chat handler")
         return 500, {"status": "error", "error": str(e)}
@@ -635,32 +659,76 @@ def study_result_page():
     yt_url = extract_youtube_url(youtube_url) if youtube_url else None
 
     if yt_url:
-        meta   = get_youtube_metadata(yt_url)
-        title  = meta.get("title", "") or "Educational video"
+        meta = get_youtube_metadata(yt_url)
+        title = meta.get("title", "") or "Educational video"
         author = meta.get("author", "")
+        vid = extract_youtube_id(yt_url)
+
+        # Prefer the real transcript when available so the answer is grounded
+        # in the video rather than relying only on its title.
+        transcript_text = ""
+        if vid:
+            try:
+                transcript_text = get_youtube_transcript_text(vid, language=language)
+            except Exception:
+                transcript_text = ""
+
+        transcript_context = ""
+        if transcript_text:
+            transcript_chunks = chunk_texts([transcript_text], 1200, 200)
+            transcript_context = "\n\n---\n\n".join(transcript_chunks[:6])
+
         prompt = (
-            f"Explain this YouTube video clearly.\nTitle: {title}\n"
-            f"Creator: {author}\nUser request:\n{notes}\n"
-            f"Give structured explanation with examples."
+            "You are an expert teacher and YouTube content analyst.\n"
+            "Explain the educational video clearly and accurately.\n\n"
+            f"Video title: {title}\nCreator: {author}\n"
+            f"Student request: {notes or 'Explain the main concepts and important points.'}\n"
+            + (f"Transcript context:\n{transcript_context}\n\n" if transcript_context else
+               "No transcript was available. Use only the title and student request; "
+               "do not invent specific claims about unseen video content.\n\n")
+            + f"Answer in {language}.\n"
+            "Structure: Topic Overview, Detailed Explanation, Key Concepts, "
+            "Examples, Important Points, and 3 Exam Questions."
         )
+
         try:
-            answer = model_chat(prompt, max_tokens=1800, temperature=0.4)
+            answer = model_chat(prompt, max_tokens=800, temperature=0.4)
+        except MistralRateLimitError as e:
+            return jsonify(_mistral_error_payload(e)), 429
+        except MistralAPIError as e:
+            return jsonify(_mistral_error_payload(e)), getattr(e, "status_code", 502)
         except Exception as e:
             return jsonify({"status": "error", "error": str(e)}), 500
-        html_answer = markdown.markdown(answer, extensions=["fenced_code", "tables"])
-        return jsonify({"status": "ok", "answer": html_answer})
 
+        html_answer = markdown.markdown(answer, extensions=["fenced_code", "tables"])
+        recommendation_text = (
+            f"Video title: {title}\nCreator: {author}\nStudent notes: {notes}\n"
+            f"Transcript: {transcript_text[:3000]}"
+        )
+        recommendations = get_youtube_recommendations(recommendation_text)
+        return jsonify({
+            "status": "ok",
+            "answer": html_answer,
+            "recommendations": recommendations,
+            "video_id": vid,
+            "grounded_by_transcript": bool(transcript_text),
+        })
     try:
         answer = model_chat(
             f"You are a helpful study assistant. Explain clearly in {language}.\n\nNotes:\n{notes}",
-            max_tokens=1000, temperature=0.3
+            max_tokens=800, temperature=0.3
         )
+    except MistralRateLimitError as e:
+        return jsonify(_mistral_error_payload(e)), 429
+    except MistralAPIError as e:
+        return jsonify(_mistral_error_payload(e)), getattr(e, "status_code", 502)
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
     if sid:
         _save_chat(sid, "ai", "study_chat", answer)
-    return jsonify({"status": "ok", "language": language, "answer": answer}), 200
+    recommendations = get_youtube_recommendations(notes)
+    return jsonify({"status": "ok", "language": language, "answer": answer, "recommendations": recommendations}), 200
 
 
 @app.route("/upload", methods=["POST"])
@@ -727,6 +795,8 @@ def process_file(filename):
             "results.html", filename=filename,
             questions=qdata, language=language, example_name=ex_name
         )
+    except MistralRateLimitError as e:
+        return "Mistral API rate limit reached. Please wait a moment and try again.", 429
     except Exception as e:
         current_app.logger.exception("Error in process_file")
         return f"Error: {e}", 500
@@ -818,7 +888,9 @@ def study_chat():
             f"Language: {language}"
         )
         try:
-            answer = model_chat(prompt, max_tokens=1800, temperature=0.4)
+            answer = model_chat(prompt, max_tokens=800, temperature=0.4)
+        except MistralRateLimitError as e:
+            return jsonify(_mistral_error_payload(e)), 429
         except Exception as e:
             return jsonify({"status": "error", "error": str(e)}), 500
 
@@ -879,7 +951,7 @@ def generate_flashcards():
         f'[{{"front": "...", "back": "..."}}]\n\nLanguage: {language}'
     )
     try:
-        raw = model_chat(prompt, max_tokens=2000, temperature=0.3)
+        raw = model_chat(prompt, max_tokens=800, temperature=0.3)
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
@@ -986,7 +1058,7 @@ def summarize_document():
     try:
         answer = model_chat(
             f"You are an expert study summarizer.\n\n{detail}\n\nContent:\n{context}\n\nLanguage: {language}",
-            max_tokens=1200, temperature=0.3
+            max_tokens=800, temperature=0.3
         )
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
@@ -1082,6 +1154,21 @@ def study_page():
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "version": "1.2.0"}), 200
+
+
+@app.errorhandler(MistralRateLimitError)
+def mistral_rate_limit_error(e):
+    return jsonify(_mistral_error_payload(e)), 429
+
+
+@app.errorhandler(MistralAPIError)
+def mistral_api_error(e):
+    return jsonify({"status": "error", "error": str(e), "code": getattr(e, "status_code", 502)}), getattr(e, "status_code", 502)
+
+
+@app.errorhandler(413)
+def request_too_large(e):
+    return jsonify({"status": "error", "error": "File is too large. Maximum upload size is 15 MB."}), 413
 
 
 @app.errorhandler(404)
