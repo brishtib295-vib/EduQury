@@ -1,0 +1,717 @@
+{% extends "base.html" %}
+
+{% block title %}{{ course.title }} | EduQury{% endblock %}
+
+{% block content %}
+
+<div class="course-page">
+
+    <!-- TOP HEADER -->
+    <div class="course-header">
+
+        <div class="course-header-left">
+
+            <a href="{{ url_for('learning_plan') }}" class="back-link">
+                ← Back to Learning Plan
+            </a>
+
+            <h1>{{ course.title }}</h1>
+
+            <p class="description">
+                {{ course.description }}
+            </p>
+
+            <div class="badges">
+
+                <span>{{ course.provider }}</span>
+
+                <span>{{ course.category }}</span>
+
+                <span>{{ course.level }}</span>
+
+                <span>{{ course.duration_hours }} hours</span>
+
+            </div>
+
+        </div>
+
+
+        <!-- PROGRESS -->
+        <div class="progress-card">
+
+            <div class="progress-circle">
+                {{ progress.progress|int }}%
+            </div>
+
+            <div class="progress-title">
+                Your Progress
+            </div>
+
+            <div class="progress-bar">
+
+                <div
+                    class="progress-fill"
+                    style="width: {{ progress.progress }}%;"
+                ></div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- LEARNING OBJECTIVES -->
+
+    <div class="card">
+
+        <h2>🎯 What you will learn</h2>
+
+        <div class="objective-list">
+
+            {% for objective in content.objectives %}
+
+            <div class="objective">
+
+                <div class="objective-check">
+                    ✓
+                </div>
+
+                <div>
+                    {{ objective }}
+                </div>
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+
+    <!-- COURSE CONTENT -->
+
+    <div class="content-heading">
+
+        <h2>📚 Course Content</h2>
+
+        <p>
+            Complete the modules below to build your competency.
+        </p>
+
+    </div>
+
+
+    {% for module in content.modules %}
+
+    <div class="module-card">
+
+        <div class="module-top">
+
+            <div class="module-number">
+                {{ loop.index }}
+            </div>
+
+            <div>
+
+                <h3>
+                    {{ module.title }}
+                </h3>
+
+                <span class="module-label">
+                    Learning Module
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="module-body">
+
+            {{ module.content | replace('\n', '<br>') | safe }}
+
+        </div>
+
+    </div>
+
+    {% endfor %}
+
+
+    <!-- FINAL SECTION -->
+
+    <div class="finish-card">
+
+        {% if progress.completed %}
+
+            <div class="completed-icon">
+                ✓
+            </div>
+
+            <h2>
+                Learning Completed
+            </h2>
+
+            <p>
+                You have completed this course.
+                Now test your competency through the assessment.
+            </p>
+
+            {% if course.competency %}
+
+            <a
+                href="{{ url_for(
+                    'assessment_by_name',
+                    name=course.competency
+                ) }}"
+                class="assessment-button"
+            >
+                Take Assessment →
+            </a>
+
+            {% endif %}
+
+
+        {% else %}
+
+            <h2>
+                🎓 Ready to test your knowledge?
+            </h2>
+
+            <p>
+                Once you have finished studying the course content,
+                mark your learning as complete.
+            </p>
+
+            <form
+                method="POST"
+                action="{{ url_for(
+                    'complete_course',
+                    course_id=course.id
+                ) }}"
+            >
+
+                <button
+                    type="submit"
+                    class="complete-button"
+                >
+                    Mark Learning Complete →
+                </button>
+
+            </form>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+
+<style>
+
+.course-page {
+
+    max-width: 1100px;
+
+    margin: 0 auto;
+
+    padding: 30px 20px 70px;
+
+    color: #172033;
+
+}
+
+
+/* HEADER */
+
+.course-header {
+
+    display: flex;
+
+    justify-content: space-between;
+
+    gap: 30px;
+
+    padding: 30px;
+
+    margin-bottom: 25px;
+
+    background: white;
+
+    border-radius: 20px;
+
+    box-shadow: 0 5px 20px rgba(0,0,0,0.07);
+
+}
+
+
+.course-header-left {
+
+    flex: 1;
+
+}
+
+
+.back-link {
+
+    display: inline-block;
+
+    margin-bottom: 15px;
+
+    color: #2563eb;
+
+    text-decoration: none;
+
+    font-weight: 600;
+
+}
+
+
+.course-header h1 {
+
+    margin: 0 0 12px;
+
+    font-size: 34px;
+
+    line-height: 1.2;
+
+}
+
+
+.description {
+
+    color: #667085;
+
+    line-height: 1.7;
+
+    max-width: 750px;
+
+}
+
+
+.badges {
+
+    display: flex;
+
+    gap: 8px;
+
+    flex-wrap: wrap;
+
+    margin-top: 18px;
+
+}
+
+
+.badges span {
+
+    background: #eef4ff;
+
+    color: #2456c3;
+
+    padding: 7px 13px;
+
+    border-radius: 20px;
+
+    font-size: 13px;
+
+    font-weight: 600;
+
+}
+
+
+/* PROGRESS */
+
+.progress-card {
+
+    width: 190px;
+
+    min-width: 190px;
+
+    padding: 22px;
+
+    border-radius: 16px;
+
+    background: #f8fafc;
+
+    text-align: center;
+
+}
+
+
+.progress-circle {
+
+    font-size: 36px;
+
+    font-weight: 800;
+
+    color: #2563eb;
+
+}
+
+
+.progress-title {
+
+    margin: 4px 0 15px;
+
+    color: #667085;
+
+    font-size: 13px;
+
+}
+
+
+.progress-bar {
+
+    width: 100%;
+
+    height: 9px;
+
+    background: #e5e7eb;
+
+    border-radius: 20px;
+
+    overflow: hidden;
+
+}
+
+
+.progress-fill {
+
+    height: 100%;
+
+    background: #2563eb;
+
+    border-radius: 20px;
+
+    transition: width .3s ease;
+
+}
+
+
+/* CARD */
+
+.card {
+
+    background: white;
+
+    border-radius: 20px;
+
+    padding: 28px;
+
+    margin-bottom: 28px;
+
+    box-shadow: 0 5px 20px rgba(0,0,0,0.06);
+
+}
+
+
+.card h2 {
+
+    margin-top: 0;
+
+}
+
+
+/* OBJECTIVES */
+
+.objective-list {
+
+    margin-top: 20px;
+
+}
+
+
+.objective {
+
+    display: flex;
+
+    gap: 12px;
+
+    align-items: center;
+
+    padding: 13px 0;
+
+    border-bottom: 1px solid #eef2f7;
+
+    color: #475467;
+
+}
+
+
+.objective-check {
+
+    width: 27px;
+
+    height: 27px;
+
+    min-width: 27px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background: #dcfce7;
+
+    color: #16a34a;
+
+    font-weight: 800;
+
+}
+
+
+/* CONTENT HEADING */
+
+.content-heading {
+
+    margin: 30px 0 18px;
+
+}
+
+
+.content-heading h2 {
+
+    margin-bottom: 5px;
+
+}
+
+
+.content-heading p {
+
+    color: #667085;
+
+}
+
+
+/* MODULE */
+
+.module-card {
+
+    background: white;
+
+    border-radius: 20px;
+
+    margin-bottom: 20px;
+
+    overflow: hidden;
+
+    box-shadow: 0 5px 20px rgba(0,0,0,0.06);
+
+}
+
+
+.module-top {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 18px;
+
+    padding: 22px 26px;
+
+    border-bottom: 1px solid #eef2f7;
+
+}
+
+
+.module-number {
+
+    width: 45px;
+
+    height: 45px;
+
+    min-width: 45px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    border-radius: 13px;
+
+    background: #2563eb;
+
+    color: white;
+
+    font-weight: 800;
+
+    font-size: 18px;
+
+}
+
+
+.module-top h3 {
+
+    margin: 0 0 4px;
+
+    font-size: 19px;
+
+}
+
+
+.module-label {
+
+    color: #667085;
+
+    font-size: 12px;
+
+}
+
+
+.module-body {
+
+    padding: 25px 30px;
+
+    color: #475467;
+
+    line-height: 1.9;
+
+    font-size: 15px;
+
+}
+
+
+/* FINISH */
+
+.finish-card {
+
+    text-align: center;
+
+    background: white;
+
+    border-radius: 20px;
+
+    padding: 35px 25px;
+
+    margin-top: 30px;
+
+    box-shadow: 0 5px 20px rgba(0,0,0,0.06);
+
+}
+
+
+.finish-card h2 {
+
+    margin-top: 10px;
+
+}
+
+
+.finish-card p {
+
+    max-width: 650px;
+
+    margin: 10px auto 25px;
+
+    color: #667085;
+
+    line-height: 1.6;
+
+}
+
+
+.complete-button,
+
+.assessment-button {
+
+    display: inline-block;
+
+    border: none;
+
+    padding: 14px 25px;
+
+    border-radius: 11px;
+
+    background: #2563eb;
+
+    color: white;
+
+    text-decoration: none;
+
+    font-size: 15px;
+
+    font-weight: 700;
+
+    cursor: pointer;
+
+}
+
+
+.complete-button:hover,
+
+.assessment-button:hover {
+
+    opacity: .9;
+
+}
+
+
+.completed-icon {
+
+    width: 55px;
+
+    height: 55px;
+
+    margin: 0 auto;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background: #dcfce7;
+
+    color: #16a34a;
+
+    font-size: 25px;
+
+    font-weight: 800;
+
+}
+
+
+/* MOBILE */
+
+@media (max-width: 700px) {
+
+    .course-header {
+
+        flex-direction: column;
+
+    }
+
+
+    .progress-card {
+
+        width: auto;
+
+    }
+
+
+    .course-header h1 {
+
+        font-size: 27px;
+
+    }
+
+
+    .module-body {
+
+        padding: 20px;
+
+    }
+
+}
+
+</style>
+
+{% endblock %}
