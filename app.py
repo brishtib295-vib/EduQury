@@ -484,19 +484,30 @@ def auth_page():
         elif User.query.filter_by(email=email).first():
             error = "User already exists."
         else:
-            user = User(
-                email=email,
-                name=name,
-                password_hash=generate_password_hash(password),
-            )
-            db.session.add(user)
-            db.session.commit()
-            if sid:
-                us = db.session.get(UserSession, sid)
-                if us:
-                    us.user_id = user.id
-                    db.session.commit()
-            return redirect(url_for("dashboard"))
+           user = User(
+    email=email,
+    name=name,
+    password_hash=generate_password_hash(password),
+)
+
+db.session.add(user)
+db.session.flush()
+
+profile = EmployeeProfile(
+    user_id=user.id
+)
+
+db.session.add(profile)
+db.session.commit()
+
+if sid:
+    us = db.session.get(UserSession, sid)
+
+    if us:
+        us.user_id = user.id
+        db.session.commit()
+
+return redirect(url_for("dashboard"))
 
     elif mode == "login":
         user = User.query.filter_by(email=email).first()
@@ -1735,9 +1746,24 @@ def not_found(e):
 
 
 @app.errorhandler(500)
-@app.errorhandler(500)
 def server_error(e):
-    current_app.logger.exception("INTERNAL SERVER ERROR")
+    original_error = getattr(e, "original_exception", None)
+
+    if original_error:
+        current_app.logger.exception(
+            "INTERNAL SERVER ERROR: %s",
+            original_error
+        )
+        return jsonify({
+            "status": "error",
+            "error": str(original_error)
+        }), 500
+
+    current_app.logger.exception(
+        "INTERNAL SERVER ERROR: %s",
+        e
+    )
+
     return jsonify({
         "status": "error",
         "error": str(e)
