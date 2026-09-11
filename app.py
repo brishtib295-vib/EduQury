@@ -1718,10 +1718,15 @@ def dashboard():
         progress_percentage=progress_percentage,
         remaining_percentage=remaining_percentage
     )
+@app.route("/study")
 def study_page():
     ex_name = Path(EXAMPLE_PATH).name if EXAMPLE_PATH else ""
-    return render_template("study.html", example_name=ex_name, active="study")
 
+    return render_template(
+        "study.html",
+        example_name=ex_name,
+        active="study"
+    )
 
 @app.route("/health")
 def health():
