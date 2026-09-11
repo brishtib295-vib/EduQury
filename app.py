@@ -1534,3 +1534,8 @@ def server_error(e):
 @app.context_processor
 def inject_user():
     return dict(current_user=getattr(g, "user", None))
+    # ── ENTRYPOINT ────────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    app.run("0.0.0.0", port=port, debug=False)
+
