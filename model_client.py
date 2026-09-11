@@ -357,3 +357,4 @@ def get_youtube_recommendations(
 
 if __name__ == "__main__":
     print("Mistral client ready.")
+
