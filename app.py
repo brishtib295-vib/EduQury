@@ -1576,7 +1576,36 @@ def assessment(competency_id):
         improvement = round((score / 100) * 0.5, 2)
         record.current_level = min(5, round((record.current_level or 0) + improvement, 2))
         record.last_assessed = datetime.utcnow()
-        db.session.add(AssessmentResult(user_id=g.user.id, competency_id=competency.id, score=score, total_questions=total, assessed_level=record.current_level))
+              db.session.add(AssessmentResult(
+            user_id=g.user.id,
+            competency_id=competency.id,
+            score=score,
+            total_questions=total,
+            assessed_level=record.current_level
+        ))
+
+        matching_courses = Course.query.filter_by(
+            competency=competency.name,
+            active=True
+        ).all()
+
+        for course in matching_courses:
+            progress_item = LearningProgress.query.filter_by(
+                user_id=g.user.id,
+                course_id=course.id
+            ).first()
+
+            if not progress_item:
+                progress_item = LearningProgress(
+                    user_id=g.user.id,
+                    course_id=course.id
+                )
+                db.session.add(progress_item)
+
+            progress_item.progress = 100
+            progress_item.last_score = score
+            progress_item.completed = True
+
         db.session.commit()
         return render_template("assessment_result.html", competency=competency, score=score, correct=correct, total=total, new_level=record.current_level)
     return render_template("assessment.html", competency=competency, questions=questions)
