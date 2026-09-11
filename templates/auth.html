@@ -1,386 +1,1492 @@
 {% extends "base.html" %}
-{% block title %}Sign In · RAG Study Buddy{% endblock %}
+{% block title %}Sign In · Eduquary{% endblock %}
 
 {% block body_data %}{% if error %}data-auth-error="{{ error | e }}"{% endif %}{% endblock %}
 
 {% block head_extra %}
 <style>
-    /* ── TAB BAR ─────────────────────────────────────── */
-    .tab-bar {
-        display: flex; gap: 0.3rem;
-        background: var(--bg2);
-        border: 1px solid var(--border-md);
-        border-radius: 14px; padding: 0.28rem;
-        margin-bottom: 1.6rem;
-    }
-    .tab-btn {
-        flex: 1; padding: 0.58rem 1rem;
-        border-radius: 11px; border: none;
-        background: transparent; color: var(--text-muted);
-        font-family: 'DM Sans', sans-serif;
-        font-size: 0.9rem; font-weight: 500; cursor: pointer;
-        transition: background 0.18s, color 0.18s, box-shadow 0.18s;
-    }
-    .tab-btn.active {
-        background: linear-gradient(135deg, rgba(37,99,235,0.28), rgba(250,204,21,0.1));
-        color: var(--text-main);
-        box-shadow: 0 0 0 1px rgba(37,99,235,0.4);
+
+    /* =========================================================
+       AUTH PAGE - CLEAN STATIC BACKGROUND
+       ========================================================= */
+
+    body {
+        background: #020617 !important;
     }
 
-    /* ── AUTH CARDS GRID ─────────────────────────────── */
-    .auth-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1.2rem;
-        margin-bottom: 1.2rem;
+    /* Remove grid/pattern from base.html */
+    body::before {
+        display: none !important;
     }
-    @media (max-width: 640px) { .auth-grid { grid-template-columns: 1fr; } }
+
+    /* Remove base radial background effects */
+    .page {
+        min-height: calc(100vh - 70px);
+    }
+
+    .page-inner {
+        max-width: 100% !important;
+        padding: 2rem 1rem 4rem !important;
+    }
+
+
+    /* =========================================================
+       MAIN AUTH WRAPPER
+       ========================================================= */
+
+    .auth-page {
+        width: 100%;
+        max-width: 620px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+
+    /* =========================================================
+       HEADER
+       ========================================================= */
+
+    .auth-header {
+        width: 100%;
+        text-align: center;
+        margin-bottom: 1.8rem;
+    }
+
+    .auth-header .pill {
+        margin-bottom: 1rem;
+    }
+
+    .auth-title {
+        font-family: 'Syne', sans-serif;
+        font-size: clamp(1.8rem, 5vw, 2.7rem);
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        line-height: 1.05;
+        color: var(--text-main);
+        margin-bottom: 0.65rem;
+    }
+
+    .auth-subtitle {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        line-height: 1.6;
+        max-width: 520px;
+        margin: 0 auto;
+    }
+
+
+    /* =========================================================
+       SERVER ERROR
+       ========================================================= */
+
+    .auth-error {
+        width: 100%;
+        margin-bottom: 1rem;
+    }
+
+
+    /* =========================================================
+       TAB BAR
+       ========================================================= */
+
+    .tab-bar {
+        width: 100%;
+        display: flex;
+        gap: 0.3rem;
+        background: #0f172a;
+        border: 1px solid var(--border-md);
+        border-radius: 14px;
+        padding: 0.28rem;
+        margin-bottom: 1rem;
+    }
+
+    .tab-btn {
+        flex: 1;
+        padding: 0.65rem 1rem;
+        border-radius: 11px;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        font-family: 'DM Sans', sans-serif;
+        font-size: 0.9rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition:
+            background 0.18s,
+            color 0.18s,
+            box-shadow 0.18s;
+    }
+
+    .tab-btn:hover {
+        color: var(--text-main);
+    }
+
+    .tab-btn.active {
+        background: linear-gradient(
+            135deg,
+            rgba(37,99,235,0.35),
+            rgba(37,99,235,0.18)
+        );
+        color: var(--text-main);
+        box-shadow: 0 0 0 1px rgba(37,99,235,0.45);
+    }
+
+
+    /* =========================================================
+       AUTH CARD
+       ========================================================= */
 
     .auth-card {
-        background: linear-gradient(135deg, rgba(15,23,42,0.96), rgba(2,6,23,0.99));
-        border: 1px solid var(--border-md);
-        border-radius: 18px; padding: 1.8rem;
-        position: relative; overflow: hidden;
-        transition: border-color 0.2s, box-shadow 0.2s;
+        width: 100%;
+        background: #0b1224;
+        border: 1px solid rgba(148,163,184,0.24);
+        border-radius: 20px;
+        padding: 2rem;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.45);
     }
-    .auth-card:hover { border-color: rgba(37,99,235,0.4); box-shadow: 0 16px 50px rgba(0,0,0,0.5); }
+
+    .auth-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(
+            90deg,
+            var(--accent),
+            #f97316,
+            var(--primary)
+        );
+        opacity: 0.9;
+    }
+
+    .auth-card:hover {
+        border-color: rgba(37,99,235,0.38);
+    }
+
+
+    /* =========================================================
+       CARD HEADER
+       ========================================================= */
 
     .card-icon-wrap {
-        display: flex; align-items: center; gap: 0.55rem; margin-bottom: 1.4rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.65rem;
+        margin-bottom: 1.6rem;
     }
-    .card-icon {
-        width: 36px; height: 36px; border-radius: 10px;
-        display: flex; align-items: center; justify-content: center; font-size: 1rem;
-    }
-    .card-icon.blue { background: rgba(37,99,235,0.18); border: 1px solid rgba(37,99,235,0.3); }
-    .card-icon.gold { background: rgba(250,204,21,0.14); border: 1px solid rgba(250,204,21,0.3); }
-    .card-title { font-family: 'Syne', sans-serif; font-size: 1.05rem; font-weight: 700; }
 
-    /* ── FIELD WRAPPER ───────────────────────────────── */
-    .field { margin-bottom: 0.9rem; }
-    .field-wrap { position: relative; }
+    .card-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 11px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+    }
+
+    .card-icon.blue {
+        background: rgba(37,99,235,0.18);
+        border: 1px solid rgba(37,99,235,0.35);
+    }
+
+    .card-icon.gold {
+        background: rgba(250,204,21,0.14);
+        border: 1px solid rgba(250,204,21,0.3);
+    }
+
+    .card-title {
+        font-family: 'Syne', sans-serif;
+        font-size: 1.08rem;
+        font-weight: 700;
+    }
+
+
+    /* =========================================================
+       FORM
+       ========================================================= */
+
+    .field {
+        margin-bottom: 1rem;
+    }
+
+    .field-wrap {
+        position: relative;
+    }
+
     .field-icon {
-        position: absolute; left: 0.8rem; top: 50%;
-        transform: translateY(-50%); color: var(--text-muted);
-        pointer-events: none; display: flex; align-items: center;
-        /* offset for the margin-top on input */
+        position: absolute;
+        left: 0.85rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        pointer-events: none;
+        display: flex;
+        align-items: center;
         margin-top: calc(0.35rem / 2);
     }
+
     .field-wrap input {
-        padding-left: 2.35rem !important;
+        padding-left: 2.45rem !important;
     }
+
     .pw-toggle {
-        position: absolute; right: 0.8rem; top: 50%;
-        transform: translateY(-50%); margin-top: calc(0.35rem / 2);
-        background: none; border: none; color: var(--text-muted);
-        cursor: pointer; padding: 0.2rem;
-        display: flex; align-items: center;
+        position: absolute;
+        right: 0.8rem;
+        top: 50%;
+        transform: translateY(-50%);
+        margin-top: calc(0.35rem / 2);
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 0.2rem;
+        display: flex;
+        align-items: center;
         transition: color 0.15s;
     }
-    .pw-toggle:hover { color: var(--text-main); }
 
-    .field-hint { font-size: 0.75rem; color: var(--danger); margin-top: 0.28rem; display: none; }
-    .field-hint.show { display: block; }
-    input.err { border-color: rgba(248,113,113,0.5) !important; }
-    input.err:focus { box-shadow: 0 0 0 3px rgba(248,113,113,0.12) !important; }
+    .pw-toggle:hover {
+        color: var(--text-main);
+    }
 
-    /* ── STRENGTH BAR ────────────────────────────────── */
-    .strength-bar { height: 3px; border-radius: 999px; background: var(--border-md); margin-top: 0.4rem; overflow: hidden; }
-    .strength-fill { height: 100%; border-radius: 999px; width: 0%; transition: width 0.3s, background 0.3s; }
-    .strength-label { font-size: 0.72rem; margin-top: 0.22rem; }
+    .field-hint {
+        font-size: 0.75rem;
+        color: var(--danger);
+        margin-top: 0.28rem;
+        display: none;
+    }
 
-    /* ── AUTH SUBMIT BUTTON ──────────────────────────── */
+    .field-hint.show {
+        display: block;
+    }
+
+    input.err {
+        border-color: rgba(248,113,113,0.5) !important;
+    }
+
+    input.err:focus {
+        box-shadow: 0 0 0 3px rgba(248,113,113,0.12) !important;
+    }
+
+
+    /* =========================================================
+       PASSWORD STRENGTH
+       ========================================================= */
+
+    .strength-bar {
+        height: 3px;
+        border-radius: 999px;
+        background: var(--border-md);
+        margin-top: 0.4rem;
+        overflow: hidden;
+    }
+
+    .strength-fill {
+        height: 100%;
+        border-radius: 999px;
+        width: 0%;
+        transition: width 0.3s, background 0.3s;
+    }
+
+    .strength-label {
+        font-size: 0.72rem;
+        margin-top: 0.22rem;
+    }
+
+
+    /* =========================================================
+       AUTH BUTTON
+       ========================================================= */
+
     .btn-auth {
-        width: 100%; margin-top: 1.2rem;
-        padding: 0.78rem 1rem;
-        border-radius: var(--radius-full); border: none;
-        font-family: 'DM Sans', sans-serif; font-size: 0.9rem; font-weight: 600;
-        cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.45rem;
-        background: linear-gradient(135deg, var(--accent) 0%, #f97316 45%, var(--primary) 100%);
+        width: 100%;
+        margin-top: 1.25rem;
+        padding: 0.82rem 1rem;
+        border-radius: var(--radius-full);
+        border: none;
+        font-family: 'DM Sans', sans-serif;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+
+        background: linear-gradient(
+            135deg,
+            var(--accent) 0%,
+            #f97316 45%,
+            var(--primary) 100%
+        );
+
         color: #020617;
-        box-shadow: 0 6px 28px rgba(37,99,235,0.45);
-        transition: transform 0.14s, box-shadow 0.14s, filter 0.14s;
-    }
-    .btn-auth:hover { transform: translateY(-1px); filter: brightness(1.05); box-shadow: 0 10px 38px rgba(37,99,235,0.6); }
-    .btn-auth:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 
-    /* ── SPINNER ─────────────────────────────────────── */
+        box-shadow: 0 8px 30px rgba(37,99,235,0.35);
+
+        transition:
+            transform 0.14s,
+            box-shadow 0.14s,
+            filter 0.14s;
+    }
+
+    .btn-auth:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.05);
+        box-shadow: 0 12px 38px rgba(37,99,235,0.5);
+    }
+
+    .btn-auth:active {
+        transform: translateY(0);
+    }
+
+    .btn-auth:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+
+    /* =========================================================
+       SPINNER
+       ========================================================= */
+
     .spinner {
-        width: 15px; height: 15px; border-radius: 50%;
-        border: 2px solid rgba(2,6,23,0.3); border-top-color: #020617;
-        animation: spin 0.6s linear infinite; display: none;
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        border: 2px solid rgba(2,6,23,0.3);
+        border-top-color: #020617;
+        animation: spin 0.6s linear infinite;
+        display: none;
     }
-    .btn-auth.loading .spinner { display: block; }
-    .btn-auth.loading .btn-text { opacity: 0.7; }
-    @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── GUEST CARD ──────────────────────────────────── */
-    .guest-card {
-        background: linear-gradient(135deg, rgba(250,204,21,0.06), rgba(15,23,42,0.97));
-        border: 1px solid rgba(250,204,21,0.2);
-        border-radius: 16px; padding: 1.4rem 1.8rem;
-        display: flex; align-items: center; gap: 1.4rem; flex-wrap: wrap;
+    .btn-auth.loading .spinner {
+        display: block;
     }
-    .guest-info { flex: 1; min-width: 200px; }
-    .guest-title { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; margin-bottom: 0.3rem; }
-    .guest-desc { font-size: 0.82rem; color: var(--text-muted); line-height: 1.55; }
+
+    .btn-auth.loading .btn-text {
+        opacity: 0.7;
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+
+    /* =========================================================
+       GUEST CARD
+       ========================================================= */
+
+    .guest-card {
+        width: 100%;
+        margin-top: 1rem;
+
+        background: #0b1224;
+        border: 1px solid rgba(250,204,21,0.22);
+        border-radius: 16px;
+
+        padding: 1.15rem 1.4rem;
+
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+
+        box-shadow: 0 15px 40px rgba(0,0,0,0.25);
+    }
+
+    .guest-icon {
+        font-size: 1.5rem;
+        line-height: 1;
+        flex-shrink: 0;
+    }
+
+    .guest-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .guest-title {
+        font-family: 'Syne', sans-serif;
+        font-size: 0.95rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .guest-desc {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        line-height: 1.5;
+    }
+
     .btn-guest {
-        padding: 0.68rem 1.4rem;
+        padding: 0.62rem 1.1rem;
         border-radius: var(--radius-full);
         border: 1px solid rgba(250,204,21,0.4);
-        background: rgba(250,204,21,0.08); color: var(--accent);
-        font-family: 'DM Sans', sans-serif; font-size: 0.88rem; font-weight: 500;
-        cursor: pointer; white-space: nowrap;
-        display: inline-flex; align-items: center; gap: 0.4rem;
-        transition: background 0.18s, box-shadow 0.18s, transform 0.14s;
+        background: rgba(250,204,21,0.08);
+        color: var(--accent);
+        font-family: 'DM Sans', sans-serif;
+        font-size: 0.82rem;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+
+        transition:
+            background 0.18s,
+            box-shadow 0.18s,
+            transform 0.14s;
     }
-    .btn-guest:hover { background: rgba(250,204,21,0.14); box-shadow: 0 0 18px rgba(250,204,21,0.2); transform: translateY(-1px); }
+
+    .btn-guest:hover {
+        background: rgba(250,204,21,0.14);
+        box-shadow: 0 0 18px rgba(250,204,21,0.15);
+        transform: translateY(-1px);
+    }
+
+
+    /* =========================================================
+       MOBILE
+       ========================================================= */
+
+    @media (max-width: 640px) {
+
+        .page-inner {
+            padding: 1.5rem 0.85rem 3rem !important;
+        }
+
+        .auth-title {
+            font-size: 2rem;
+        }
+
+        .auth-card {
+            padding: 1.4rem;
+        }
+
+        .guest-card {
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .guest-info {
+            min-width: calc(100% - 50px);
+        }
+
+        .btn-guest {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+
 </style>
 {% endblock %}
 
+
 {% block content %}
 
-<div style="max-width: 860px; margin: 0 auto;">
+<div class="auth-page">
 
-    <!-- HEADER -->
-    <div style="text-align:center; margin-bottom: 2.2rem;">
-        <div class="pill" style="margin-bottom: 1rem;">🔐 &nbsp; Auth · Optional</div>
-        <h1 class="page-title" style="font-size: clamp(1.7rem, 4vw, 2.4rem);">Welcome to RAG Study Buddy</h1>
-        <p class="page-sub" style="margin: 0.5rem auto 0; text-align:center;">
-            Sign in to save your history across devices — or jump in as a guest instantly.
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
+
+    <div class="auth-header">
+
+        <div class="pill">
+            🔐 &nbsp; Auth · Optional
+        </div>
+
+        <h1 class="auth-title">
+            Welcome to Eduquary
+        </h1>
+
+        <p class="auth-subtitle">
+            Sign in to save your history across devices —
+            or continue as a guest instantly.
         </p>
+
     </div>
 
-    <!-- SERVER ERROR -->
+
+    <!-- =====================================================
+         SERVER ERROR
+         ===================================================== -->
+
     {% if error %}
-    <div class="flash flash-error" style="max-width:860px; margin: 0 auto 1.2rem;">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        {{ error }}
+
+    <div class="auth-error">
+
+        <div class="flash flash-error">
+
+            <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+            >
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+
+            {{ error }}
+
+        </div>
+
     </div>
+
     {% endif %}
 
-    <!-- TAB BAR -->
+
+    <!-- =====================================================
+         TABS
+         ===================================================== -->
+
     <div class="tab-bar" id="tabBar">
-        <button class="tab-btn active" id="tab-login"  onclick="switchTab('login')">Sign in</button>
-        <button class="tab-btn"        id="tab-signup" onclick="switchTab('signup')">Create account</button>
+
+        <button
+            class="tab-btn active"
+            id="tab-login"
+            onclick="switchTab('login')"
+        >
+            Sign in
+        </button>
+
+        <button
+            class="tab-btn"
+            id="tab-signup"
+            onclick="switchTab('signup')"
+        >
+            Create account
+        </button>
+
     </div>
 
-    <!-- ── LOGIN + SIGNUP SIDE BY SIDE ── -->
-    <div class="auth-grid">
 
-        <!-- LOGIN -->
-        <div class="auth-card" id="card-login">
-            <div class="card-icon-wrap">
-                <div class="card-icon blue">🔑</div>
-                <div class="card-title">Sign in</div>
+    <!-- =====================================================
+         LOGIN CARD
+         ===================================================== -->
+
+    <div
+        class="auth-card"
+        id="card-login"
+    >
+
+        <div class="card-icon-wrap">
+
+            <div class="card-icon blue">
+                🔑
             </div>
 
-            {# NOTE: action="/auth" and method="POST" — the hidden mode field tells Flask which branch to run #}
-            <form method="POST" action="/auth" id="form-login" novalidate>
-                <input type="hidden" name="mode" value="login" />
-
-                <div class="field">
-                    <label for="l-email">Email address</label>
-                    <div class="field-wrap">
-                        <span class="field-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,12 2,6"/></svg>
-                        </span>
-                        <input type="email" id="l-email" name="email" placeholder="you@example.com" autocomplete="email" />
-                    </div>
-                    <div class="field-hint" id="l-email-hint">Please enter a valid email.</div>
-                </div>
-
-                <div class="field">
-                    <label for="l-pw">Password</label>
-                    <div class="field-wrap">
-                        <span class="field-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                        </span>
-                        <input type="password" id="l-pw" name="password" placeholder="••••••••" autocomplete="current-password" />
-                        <button type="button" class="pw-toggle" onclick="togglePw('l-pw',this)">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                        </button>
-                    </div>
-                    <div class="field-hint" id="l-pw-hint">Password is required.</div>
-                </div>
-
-                <button type="submit" class="btn-auth" id="btn-login">
-                    <span class="spinner"></span>
-                    <span class="btn-text">Sign in</span>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                </button>
-            </form>
-        </div>
-
-        <!-- SIGNUP -->
-        <div class="auth-card" id="card-signup" style="display:none;">
-            <div class="card-icon-wrap">
-                <div class="card-icon gold">✨</div>
-                <div class="card-title">Create account</div>
+            <div class="card-title">
+                Sign in
             </div>
 
-            <form method="POST" action="/auth" id="form-signup" novalidate>
-                <input type="hidden" name="mode" value="signup" />
-
-                <div class="field">
-                    <label for="s-name">Full name</label>
-                    <div class="field-wrap">
-                        <span class="field-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        </span>
-                        <input type="text" id="s-name" name="name" placeholder="Your name" autocomplete="name" />
-                    </div>
-                    <div class="field-hint" id="s-name-hint">Name is required.</div>
-                </div>
-
-                <div class="field">
-                    <label for="s-email">Email address</label>
-                    <div class="field-wrap">
-                        <span class="field-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,12 2,6"/></svg>
-                        </span>
-                        <input type="email" id="s-email" name="email" placeholder="you@example.com" autocomplete="email" />
-                    </div>
-                    <div class="field-hint" id="s-email-hint">Please enter a valid email.</div>
-                </div>
-
-                <div class="field">
-                    <label for="s-pw">Password</label>
-                    <div class="field-wrap">
-                        <span class="field-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                        </span>
-                        <input type="password" id="s-pw" name="password" placeholder="Min. 8 characters" autocomplete="new-password" oninput="checkStrength(this.value)" />
-                        <button type="button" class="pw-toggle" onclick="togglePw('s-pw',this)">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                        </button>
-                    </div>
-                    <div class="strength-bar"><div class="strength-fill" id="s-strength-fill"></div></div>
-                    <div class="strength-label muted" id="s-strength-label"></div>
-                    <div class="field-hint" id="s-pw-hint">Password must be at least 8 characters.</div>
-                </div>
-
-                <button type="submit" class="btn-auth" id="btn-signup">
-                    <span class="spinner"></span>
-                    <span class="btn-text">Create account</span>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                </button>
-            </form>
         </div>
 
-    </div>{# /auth-grid #}
 
-    <!-- GUEST CARD -->
-    <div class="guest-card">
-        <div style="font-size:1.7rem; line-height:1;">👋</div>
-        <div class="guest-info">
-            <div class="guest-title">Continue as guest</div>
-            <div class="guest-desc">No account needed. History stored only in this browser — resets if you clear cookies.</div>
-        </div>
-        <form method="POST" action="/auth" style="margin:0;">
-            <input type="hidden" name="mode" value="guest" />
-            <button type="submit" class="btn-guest">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                Jump in
+        <form
+            method="POST"
+            action="/auth"
+            id="form-login"
+            novalidate
+        >
+
+            <input
+                type="hidden"
+                name="mode"
+                value="login"
+            />
+
+
+            <!-- EMAIL -->
+
+            <div class="field">
+
+                <label for="l-email">
+                    Email address
+                </label>
+
+                <div class="field-wrap">
+
+                    <span class="field-icon">
+
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                            <polyline points="22,6 12,12 2,6"></polyline>
+                        </svg>
+
+                    </span>
+
+                    <input
+                        type="email"
+                        id="l-email"
+                        name="email"
+                        placeholder="you@example.com"
+                        autocomplete="email"
+                    />
+
+                </div>
+
+                <div
+                    class="field-hint"
+                    id="l-email-hint"
+                >
+                    Please enter a valid email.
+                </div>
+
+            </div>
+
+
+            <!-- PASSWORD -->
+
+            <div class="field">
+
+                <label for="l-pw">
+                    Password
+                </label>
+
+                <div class="field-wrap">
+
+                    <span class="field-icon">
+
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <rect
+                                x="3"
+                                y="11"
+                                width="18"
+                                height="11"
+                                rx="2"
+                            ></rect>
+
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+
+                    </span>
+
+                    <input
+                        type="password"
+                        id="l-pw"
+                        name="password"
+                        placeholder="••••••••"
+                        autocomplete="current-password"
+                    />
+
+                    <button
+                        type="button"
+                        class="pw-toggle"
+                        onclick="togglePw('l-pw',this)"
+                        aria-label="Show password"
+                    >
+
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+
+                    </button>
+
+                </div>
+
+                <div
+                    class="field-hint"
+                    id="l-pw-hint"
+                >
+                    Password is required.
+                </div>
+
+            </div>
+
+
+            <!-- LOGIN BUTTON -->
+
+            <button
+                type="submit"
+                class="btn-auth"
+                id="btn-login"
+            >
+
+                <span class="spinner"></span>
+
+                <span class="btn-text">
+                    Sign in
+                </span>
+
+                <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                >
+                    <path d="M5 12h14"></path>
+                    <path d="M12 5l7 7-7 7"></path>
+                </svg>
+
             </button>
+
         </form>
+
+    </div>
+
+
+    <!-- =====================================================
+         SIGNUP CARD
+         ===================================================== -->
+
+    <div
+        class="auth-card"
+        id="card-signup"
+        style="display:none;"
+    >
+
+        <div class="card-icon-wrap">
+
+            <div class="card-icon gold">
+                ✨
+            </div>
+
+            <div class="card-title">
+                Create account
+            </div>
+
+        </div>
+
+
+        <form
+            method="POST"
+            action="/auth"
+            id="form-signup"
+            novalidate
+        >
+
+            <input
+                type="hidden"
+                name="mode"
+                value="signup"
+            />
+
+
+            <!-- NAME -->
+
+            <div class="field">
+
+                <label for="s-name">
+                    Full name
+                </label>
+
+                <div class="field-wrap">
+
+                    <span class="field-icon">
+
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+
+                    </span>
+
+                    <input
+                        type="text"
+                        id="s-name"
+                        name="name"
+                        placeholder="Your name"
+                        autocomplete="name"
+                    />
+
+                </div>
+
+                <div
+                    class="field-hint"
+                    id="s-name-hint"
+                >
+                    Name is required.
+                </div>
+
+            </div>
+
+
+            <!-- EMAIL -->
+
+            <div class="field">
+
+                <label for="s-email">
+                    Email address
+                </label>
+
+                <div class="field-wrap">
+
+                    <span class="field-icon">
+
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                            <polyline points="22,6 12,12 2,6"></polyline>
+                        </svg>
+
+                    </span>
+
+                    <input
+                        type="email"
+                        id="s-email"
+                        name="email"
+                        placeholder="you@example.com"
+                        autocomplete="email"
+                    />
+
+                </div>
+
+                <div
+                    class="field-hint"
+                    id="s-email-hint"
+                >
+                    Please enter a valid email.
+                </div>
+
+            </div>
+
+
+            <!-- PASSWORD -->
+
+            <div class="field">
+
+                <label for="s-pw">
+                    Password
+                </label>
+
+                <div class="field-wrap">
+
+                    <span class="field-icon">
+
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <rect
+                                x="3"
+                                y="11"
+                                width="18"
+                                height="11"
+                                rx="2"
+                            ></rect>
+
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+
+                    </span>
+
+                    <input
+                        type="password"
+                        id="s-pw"
+                        name="password"
+                        placeholder="Min. 8 characters"
+                        autocomplete="new-password"
+                        oninput="checkStrength(this.value)"
+                    />
+
+                    <button
+                        type="button"
+                        class="pw-toggle"
+                        onclick="togglePw('s-pw',this)"
+                        aria-label="Show password"
+                    >
+
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+
+                    </button>
+
+                </div>
+
+
+                <div class="strength-bar">
+
+                    <div
+                        class="strength-fill"
+                        id="s-strength-fill"
+                    ></div>
+
+                </div>
+
+                <div
+                    class="strength-label muted"
+                    id="s-strength-label"
+                ></div>
+
+                <div
+                    class="field-hint"
+                    id="s-pw-hint"
+                >
+                    Password must be at least 8 characters.
+                </div>
+
+            </div>
+
+
+            <!-- SIGNUP BUTTON -->
+
+            <button
+                type="submit"
+                class="btn-auth"
+                id="btn-signup"
+            >
+
+                <span class="spinner"></span>
+
+                <span class="btn-text">
+                    Create account
+                </span>
+
+                <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                >
+                    <path d="M5 12h14"></path>
+                    <path d="M12 5l7 7-7 7"></path>
+                </svg>
+
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <!-- =====================================================
+         GUEST
+         ===================================================== -->
+
+    <div class="guest-card">
+
+        <div class="guest-icon">
+            👋
+        </div>
+
+        <div class="guest-info">
+
+            <div class="guest-title">
+                Continue as guest
+            </div>
+
+            <div class="guest-desc">
+                No account needed. History is stored only in this browser.
+            </div>
+
+        </div>
+
+        <form
+            method="POST"
+            action="/auth"
+            style="margin:0;"
+        >
+
+            <input
+                type="hidden"
+                name="mode"
+                value="guest"
+            />
+
+            <button
+                type="submit"
+                class="btn-guest"
+            >
+
+                <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                >
+                    <path d="M5 12h14"></path>
+                    <path d="M12 5l7 7-7 7"></path>
+                </svg>
+
+                Jump in
+
+            </button>
+
+        </form>
+
     </div>
 
 </div>
+
 {% endblock %}
 
+
 {% block scripts %}
+
 <script>
-// ── TAB SWITCHING ─────────────────────────────────────────────────────────────
+
+/* =========================================================
+   TAB SWITCHING
+   ========================================================= */
+
 function switchTab(tab) {
+
     const isLogin = tab === 'login';
-    document.getElementById('tab-login').classList.toggle('active',  isLogin);
-    document.getElementById('tab-signup').classList.toggle('active', !isLogin);
-    document.getElementById('card-login').style.display  = isLogin  ? '' : 'none';
-    document.getElementById('card-signup').style.display = !isLogin ? '' : 'none';
+
+    document
+        .getElementById('tab-login')
+        .classList
+        .toggle('active', isLogin);
+
+    document
+        .getElementById('tab-signup')
+        .classList
+        .toggle('active', !isLogin);
+
+    document
+        .getElementById('card-login')
+        .style
+        .display = isLogin ? '' : 'none';
+
+    document
+        .getElementById('card-signup')
+        .style
+        .display = !isLogin ? '' : 'none';
 }
 
-// ── PASSWORD SHOW/HIDE ────────────────────────────────────────────────────────
+
+/* =========================================================
+   PASSWORD SHOW / HIDE
+   ========================================================= */
+
 function togglePw(id, btn) {
+
     const inp = document.getElementById(id);
+
     const show = inp.type === 'password';
+
     inp.type = show ? 'text' : 'password';
+
     btn.innerHTML = show
-        ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
-        : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+
+        ? `<svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+           >
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path>
+                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+           </svg>`
+
+        : `<svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+           >
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+           </svg>`;
 }
 
-// ── PASSWORD STRENGTH ─────────────────────────────────────────────────────────
+
+/* =========================================================
+   PASSWORD STRENGTH
+   ========================================================= */
+
 function checkStrength(val) {
-    const fill  = document.getElementById('s-strength-fill');
-    const label = document.getElementById('s-strength-label');
-    if (!val) { fill.style.width='0%'; label.textContent=''; return; }
-    let score = 0;
-    if (val.length >= 8)  score++;
-    if (val.length >= 12) score++;
-    if (/[A-Z]/.test(val)) score++;
-    if (/[0-9]/.test(val)) score++;
-    if (/[^A-Za-z0-9]/.test(val)) score++;
-    const lvls = [
-        {pct:'20%',color:'#f87171',text:'Weak'},
-        {pct:'40%',color:'#fb923c',text:'Fair'},
-        {pct:'60%',color:'#facc15',text:'Good'},
-        {pct:'80%',color:'#34d399',text:'Strong'},
-        {pct:'100%',color:'#34d399',text:'Very strong'},
-    ];
-    const l = lvls[Math.min(score-1, 4)] || lvls[0];
-    fill.style.width = l.pct; fill.style.background = l.color;
-    label.textContent = l.text; label.style.color = l.color;
-}
 
-// ── CLIENT VALIDATION ─────────────────────────────────────────────────────────
-function validEmail(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+    const fill =
+        document.getElementById('s-strength-fill');
 
-function hint(id, show){
-    const el = document.getElementById(id);
-    if(el) el.classList.toggle('show', show);
-}
-function markErr(id, bad){
-    const el = document.getElementById(id);
-    if(el) el.classList.toggle('err', bad);
-}
+    const label =
+        document.getElementById('s-strength-label');
 
-document.getElementById('form-login').addEventListener('submit', function(e){
-    const email = document.getElementById('l-email').value.trim();
-    const pw    = document.getElementById('l-pw').value;
-    const eErr  = !validEmail(email);
-    const pErr  = !pw;
-    markErr('l-email', eErr); hint('l-email-hint', eErr);
-    markErr('l-pw',    pErr); hint('l-pw-hint',    pErr);
-    if(eErr || pErr){ e.preventDefault(); return; }
-    const btn = document.getElementById('btn-login');
-    btn.classList.add('loading'); btn.disabled = true;
-});
+    if (!val) {
 
-document.getElementById('form-signup').addEventListener('submit', function(e){
-    const name  = document.getElementById('s-name').value.trim();
-    const email = document.getElementById('s-email').value.trim();
-    const pw    = document.getElementById('s-pw').value;
-    const nErr  = !name;
-    const eErr  = !validEmail(email);
-    const pErr  = pw.length < 8;
-    markErr('s-name',  nErr); hint('s-name-hint',  nErr);
-    markErr('s-email', eErr); hint('s-email-hint', eErr);
-    markErr('s-pw',    pErr); hint('s-pw-hint',    pErr);
-    if(nErr || eErr || pErr){ e.preventDefault(); return; }
-    const btn = document.getElementById('btn-signup');
-    btn.classList.add('loading'); btn.disabled = true;
-});
+        fill.style.width = '0%';
+        label.textContent = '';
 
-// ── AUTO-SWITCH TAB if server bounced a signup error ─────────────────────────
-(function(){
-    const p = new URLSearchParams(window.location.search);
-    if(p.get('tab') === 'signup') switchTab('signup');
-    // Read server error from data attribute — no Jinja2 inside JS
-    const errText = document.body.dataset.authError || '';
-    if(errText && (errText.includes('already') || errText.includes('signup') || errText.includes('sign up'))){
-        switchTab('signup');
+        return;
     }
+
+    let score = 0;
+
+    if (val.length >= 8) {
+        score++;
+    }
+
+    if (val.length >= 12) {
+        score++;
+    }
+
+    if (/[A-Z]/.test(val)) {
+        score++;
+    }
+
+    if (/[0-9]/.test(val)) {
+        score++;
+    }
+
+    if (/[^A-Za-z0-9]/.test(val)) {
+        score++;
+    }
+
+    const lvls = [
+
+        {
+            pct: '20%',
+            color: '#f87171',
+            text: 'Weak'
+        },
+
+        {
+            pct: '40%',
+            color: '#fb923c',
+            text: 'Fair'
+        },
+
+        {
+            pct: '60%',
+            color: '#facc15',
+            text: 'Good'
+        },
+
+        {
+            pct: '80%',
+            color: '#34d399',
+            text: 'Strong'
+        },
+
+        {
+            pct: '100%',
+            color: '#34d399',
+            text: 'Very strong'
+        }
+
+    ];
+
+    const l =
+        lvls[Math.min(score - 1, 4)] || lvls[0];
+
+    fill.style.width = l.pct;
+
+    fill.style.background = l.color;
+
+    label.textContent = l.text;
+
+    label.style.color = l.color;
+}
+
+
+/* =========================================================
+   VALIDATION HELPERS
+   ========================================================= */
+
+function validEmail(v) {
+
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
+}
+
+
+function hint(id, show) {
+
+    const el = document.getElementById(id);
+
+    if (el) {
+        el.classList.toggle('show', show);
+    }
+
+}
+
+
+function markErr(id, bad) {
+
+    const el = document.getElementById(id);
+
+    if (el) {
+        el.classList.toggle('err', bad);
+    }
+
+}
+
+
+/* =========================================================
+   LOGIN VALIDATION
+   ========================================================= */
+
+document
+    .getElementById('form-login')
+    .addEventListener('submit', function(e) {
+
+        const email =
+            document
+                .getElementById('l-email')
+                .value
+                .trim();
+
+        const pw =
+            document
+                .getElementById('l-pw')
+                .value;
+
+        const eErr =
+            !validEmail(email);
+
+        const pErr =
+            !pw;
+
+        markErr(
+            'l-email',
+            eErr
+        );
+
+        hint(
+            'l-email-hint',
+            eErr
+        );
+
+        markErr(
+            'l-pw',
+            pErr
+        );
+
+        hint(
+            'l-pw-hint',
+            pErr
+        );
+
+        if (eErr || pErr) {
+
+            e.preventDefault();
+
+            return;
+        }
+
+        const btn =
+            document.getElementById('btn-login');
+
+        btn.classList.add('loading');
+
+        btn.disabled = true;
+
+    });
+
+
+/* =========================================================
+   SIGNUP VALIDATION
+   ========================================================= */
+
+document
+    .getElementById('form-signup')
+    .addEventListener('submit', function(e) {
+
+        const name =
+            document
+                .getElementById('s-name')
+                .value
+                .trim();
+
+        const email =
+            document
+                .getElementById('s-email')
+                .value
+                .trim();
+
+        const pw =
+            document
+                .getElementById('s-pw')
+                .value;
+
+        const nErr =
+            !name;
+
+        const eErr =
+            !validEmail(email);
+
+        const pErr =
+            pw.length < 8;
+
+        markErr(
+            's-name',
+            nErr
+        );
+
+        hint(
+            's-name-hint',
+            nErr
+        );
+
+        markErr(
+            's-email',
+            eErr
+        );
+
+        hint(
+            's-email-hint',
+            eErr
+        );
+
+        markErr(
+            's-pw',
+            pErr
+        );
+
+        hint(
+            's-pw-hint',
+            pErr
+        );
+
+        if (nErr || eErr || pErr) {
+
+            e.preventDefault();
+
+            return;
+        }
+
+        const btn =
+            document.getElementById('btn-signup');
+
+        btn.classList.add('loading');
+
+        btn.disabled = true;
+
+    });
+
+
+/* =========================================================
+   AUTO SWITCH TO SIGNUP ON SERVER ERROR
+   ========================================================= */
+
+(function() {
+
+    const p =
+        new URLSearchParams(
+            window.location.search
+        );
+
+    if (
+        p.get('tab') === 'signup'
+    ) {
+
+        switchTab('signup');
+
+    }
+
+    const errText =
+        document.body.dataset.authError || '';
+
+    if (
+        errText &&
+        (
+            errText.includes('already') ||
+            errText.includes('signup') ||
+            errText.includes('sign up')
+        )
+    ) {
+
+        switchTab('signup');
+
+    }
+
 })();
+
 </script>
+
 {% endblock %}
