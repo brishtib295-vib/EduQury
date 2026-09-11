@@ -93,11 +93,28 @@ SESSION_COOKIE_NAME = "rag_session_id"
 
 # ── Flask + DB ────────────────────────────────────────────────────────────────
 app = Flask(__name__, template_folder="templates")
-app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
-    "DATABASE_URL", f"sqlite:///{BASE_DIR}/rag_study_buddy.db"
+
+database_url = os.getenv(
+    "DATABASE_URL",
+    f"sqlite:///{BASE_DIR}/rag_study_buddy.db"
 )
+
+# Railway / PostgreSQL compatibility
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace(
+        "postgres://",
+        "postgresql://",
+        1
+    )
+
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", uuid.uuid4().hex)
+
+# Stable secret key so sessions do not randomly change after restart
+app.config["SECRET_KEY"] = os.getenv(
+    "SECRET_KEY",
+    "eduquery-demo-secret-key-2026"
+)
 # Keep uploads reasonable for a student-demo deployment.
 app.config["MAX_CONTENT_LENGTH"] = 15 * 1024 * 1024
 db = SQLAlchemy(app)
@@ -303,13 +320,77 @@ def seed_courses():
             db.session.add(Course(title=title, provider=provider, category=category, competency=competency, level=level, description=description, duration_hours=hours))
 
 
+
+
+def seed_demo_account():
+    demo_email = "demo@eduquery.com"
+    demo_password = "Demo@1234"
+
+    user = User.query.filter_by(email=demo_email).first()
+
+    if not user:
+        user = User(
+            email=demo_email,
+            name="Demo Employee",
+            password_hash=generate_password_hash(demo_password)
+        )
+        db.session.add(user)
+        db.session.flush()
+
+    profile = EmployeeProfile.query.filter_by(user_id=user.id).first()
+
+    if not profile:
+        profile = EmployeeProfile(user_id=user.id)
+        db.session.add(profile)
+
+    profile.designation = "Data Analyst"
+    profile.department = "Analytics"
+    profile.organization = "EduQuery Demo"
+    profile.work_domain = "Data & AI"
+    profile.current_assignment = (
+        "Building data dashboards and AI-assisted analytics solutions"
+    )
+    profile.experience_years = 2
+    profile.education = "B.Tech / Computer Science"
+    profile.preferred_language = "English"
+    profile.learning_goal = (
+        "Improve SQL, Python, Data Visualization and Machine Learning skills"
+    )
+
+    demo_skills = {
+        "SQL": (2.0, 4.0),
+        "Python": (2.5, 4.0),
+        "Data Visualization": (2.0, 4.0),
+        "Artificial Intelligence": (1.5, 3.0),
+        "Machine Learning": (1.0, 3.0),
+    }
+
+    for skill_name, (current, required) in demo_skills.items():
+        competency = Competency.query.filter_by(name=skill_name).first()
+
+        if competency:
+            employee_competency = EmployeeCompetency.query.filter_by(
+                user_id=user.id,
+                competency_id=competency.id
+            ).first()
+
+            if not employee_competency:
+                employee_competency = EmployeeCompetency(
+                    user_id=user.id,
+                    competency_id=competency.id
+                )
+                db.session.add(employee_competency)
+
+            employee_competency.current_level = current
+            employee_competency.required_level = required
+
+
 with app.app_context():
     db.create_all()
     seed_competencies()
     seed_courses()
+    seed_demo_account()
     db.session.commit()
-
-
 # ── SESSION HELPERS ───────────────────────────────────────────────────────────
 
 @app.before_request
