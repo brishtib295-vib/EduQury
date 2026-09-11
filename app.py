@@ -1371,26 +1371,17 @@ def learning_plan():
     progress = LearningProgress.query.filter_by(user_id=g.user.id).order_by(LearningProgress.updated_at.desc()).all()
     return render_template("learning_plan.html", recommendations=recommendations, progress=progress)
 
-
 @app.route("/course/<int:course_id>/start", methods=["POST"])
 def start_course(course_id):
     if not _current_user_required():
         return jsonify({"status": "error", "error": "Login required"}), 401
-
     course = db.session.get(Course, course_id)
-
     if not course:
-        return jsonify({
-            "status": "error",
-            "error": "Course not found"
-        }), 404
-
-    # Create or update the employee's learning progress
+        return jsonify({"status": "error", "error": "Course not found"}), 404
     item = LearningProgress.query.filter_by(
         user_id=g.user.id,
         course_id=course.id
     ).first()
-
     if not item:
         item = LearningProgress(
             user_id=g.user.id,
@@ -1401,24 +1392,15 @@ def start_course(course_id):
         db.session.add(item)
     else:
         item.progress = max(item.progress or 0, 5)
-
     db.session.commit()
-
-    # Open the assessment for the competency associated
-    # with this course instead of returning to the learning plan.
-    competency = Competency.query.filter_by(
-        name=course.competency
-    ).first()
-
+    # Open assessment...
+    competency = Competency.query.filter_by(name=course.competency).first()
     if not competency:
         return redirect(url_for("learning_plan"))
+    return redirect(url_for("assessment", competency_id=competency.id
+                           )
+                   )
 
-    return redirect(
-        url_for(
-            "assessment",
-            competency_id=competency.id
-        )
-    )
 
 @app.route("/progress")
 def progress_page():
