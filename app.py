@@ -1353,7 +1353,10 @@ def landing():
 
 @app.route("/app")
 def app_home():
-    return render_template("dashboard.html")
+    if not _current_user_required():
+        return redirect(url_for("auth_page"))
+
+    return redirect(url_for("dashboard"))
 
 
 def _current_user_required():
