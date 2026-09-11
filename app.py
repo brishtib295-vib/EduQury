@@ -322,74 +322,10 @@ def seed_courses():
 
 
 
-def seed_demo_account():
-    demo_email = "demo@eduquery.com"
-    demo_password = "Demo@1234"
-
-    user = User.query.filter_by(email=demo_email).first()
-
-    if not user:
-        user = User(
-            email=demo_email,
-            name="Demo Employee",
-            password_hash=generate_password_hash(demo_password)
-        )
-        db.session.add(user)
-        db.session.flush()
-
-    profile = EmployeeProfile.query.filter_by(user_id=user.id).first()
-
-    if not profile:
-        profile = EmployeeProfile(user_id=user.id)
-        db.session.add(profile)
-
-    profile.designation = "Data Analyst"
-    profile.department = "Analytics"
-    profile.organization = "EduQuery Demo"
-    profile.work_domain = "Data & AI"
-    profile.current_assignment = (
-        "Building data dashboards and AI-assisted analytics solutions"
-    )
-    profile.experience_years = 2
-    profile.education = "B.Tech / Computer Science"
-    profile.preferred_language = "English"
-    profile.learning_goal = (
-        "Improve SQL, Python, Data Visualization and Machine Learning skills"
-    )
-
-    demo_skills = {
-        "SQL": (2.0, 4.0),
-        "Python": (2.5, 4.0),
-        "Data Visualization": (2.0, 4.0),
-        "Artificial Intelligence": (1.5, 3.0),
-        "Machine Learning": (1.0, 3.0),
-    }
-
-    for skill_name, (current, required) in demo_skills.items():
-        competency = Competency.query.filter_by(name=skill_name).first()
-
-        if competency:
-            employee_competency = EmployeeCompetency.query.filter_by(
-                user_id=user.id,
-                competency_id=competency.id
-            ).first()
-
-            if not employee_competency:
-                employee_competency = EmployeeCompetency(
-                    user_id=user.id,
-                    competency_id=competency.id
-                )
-                db.session.add(employee_competency)
-
-            employee_competency.current_level = current
-            employee_competency.required_level = required
-
-
 with app.app_context():
     db.create_all()
     seed_competencies()
     seed_courses()
-    seed_demo_account()
     db.session.commit()
 # ── SESSION HELPERS ───────────────────────────────────────────────────────────
 
@@ -484,30 +420,19 @@ def auth_page():
         elif User.query.filter_by(email=email).first():
             error = "User already exists."
         else:
-           user = User(
-    email=email,
-    name=name,
-    password_hash=generate_password_hash(password),
-)
-
-db.session.add(user)
-db.session.flush()
-
-profile = EmployeeProfile(
-    user_id=user.id
-)
-
-db.session.add(profile)
-db.session.commit()
-
-if sid:
-    us = db.session.get(UserSession, sid)
-
-    if us:
-        us.user_id = user.id
-        db.session.commit()
-
-return redirect(url_for("dashboard"))
+            user = User(
+                email=email,
+                name=name,
+                password_hash=generate_password_hash(password),
+            )
+            db.session.add(user)
+            db.session.commit()
+            if sid:
+                us = db.session.get(UserSession, sid)
+                if us:
+                    us.user_id = user.id
+                    db.session.commit()
+            return redirect(url_for("dashboard"))
 
     elif mode == "login":
         user = User.query.filter_by(email=email).first()
@@ -1353,10 +1278,7 @@ def landing():
 
 @app.route("/app")
 def app_home():
-    if not _current_user_required():
-        return redirect(url_for("auth_page"))
-
-    return redirect(url_for("dashboard"))
+    return render_template("dashboard.html")
 
 
 def _current_user_required():
@@ -1576,36 +1498,7 @@ def assessment(competency_id):
         improvement = round((score / 100) * 0.5, 2)
         record.current_level = min(5, round((record.current_level or 0) + improvement, 2))
         record.last_assessed = datetime.utcnow()
-              db.session.add(AssessmentResult(
-            user_id=g.user.id,
-            competency_id=competency.id,
-            score=score,
-            total_questions=total,
-            assessed_level=record.current_level
-        ))
-
-        matching_courses = Course.query.filter_by(
-            competency=competency.name,
-            active=True
-        ).all()
-
-        for course in matching_courses:
-            progress_item = LearningProgress.query.filter_by(
-                user_id=g.user.id,
-                course_id=course.id
-            ).first()
-
-            if not progress_item:
-                progress_item = LearningProgress(
-                    user_id=g.user.id,
-                    course_id=course.id
-                )
-                db.session.add(progress_item)
-
-            progress_item.progress = 100
-            progress_item.last_score = score
-            progress_item.completed = True
-
+        db.session.add(AssessmentResult(user_id=g.user.id, competency_id=competency.id, score=score, total_questions=total, assessed_level=record.current_level))
         db.session.commit()
         return render_template("assessment_result.html", competency=competency, score=score, correct=correct, total=total, new_level=record.current_level)
     return render_template("assessment.html", competency=competency, questions=questions)
@@ -1747,15 +1640,10 @@ def dashboard():
         progress_percentage=progress_percentage,
         remaining_percentage=remaining_percentage
     )
-@app.route("/study")
 def study_page():
     ex_name = Path(EXAMPLE_PATH).name if EXAMPLE_PATH else ""
+    return render_template("study.html", example_name=ex_name, active="study")
 
-    return render_template(
-        "study.html",
-        example_name=ex_name,
-        active="study"
-    )
 
 @app.route("/health")
 def health():
@@ -1784,23 +1672,7 @@ def not_found(e):
 
 @app.errorhandler(500)
 def server_error(e):
-    original_error = getattr(e, "original_exception", None)
-
-    if original_error:
-        current_app.logger.exception(
-            "INTERNAL SERVER ERROR: %s",
-            original_error
-        )
-        return jsonify({
-            "status": "error",
-            "error": str(original_error)
-        }), 500
-
-    current_app.logger.exception(
-        "INTERNAL SERVER ERROR: %s",
-        e
-    )
-
+    current_app.logger.exception("INTERNAL SERVER ERROR")
     return jsonify({
         "status": "error",
         "error": str(e)
