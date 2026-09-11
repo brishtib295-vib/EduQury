@@ -7,10 +7,14 @@ import urllib.parse
 from pathlib import Path
 from typing import Optional, List
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load .env BEFORE importing model_client so Mistral configuration is available.
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(dotenv_path=BASE_DIR / ".env", override=True)
 
 import markdown
 import numpy as np
-from dotenv import load_dotenv
 import requests
 from flask import (
     Flask,
@@ -47,9 +51,6 @@ except ImportError:
 
 from PIL import Image
 
-# ── Load env early so MISTRAL_API_KEY is available for model_client ──────────
-
-load_dotenv()
 
 
 def _mistral_error_payload(exc):
@@ -82,7 +83,6 @@ def get_youtube_metadata(url):
 
 
 # ── Basic config ──────────────────────────────────────────────────────────────
-BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
@@ -178,11 +178,136 @@ class Flashcard(db.Model):
     difficulty      = db.Column(db.String(10), nullable=True)
 
 
+
+# ── EMPLOYEE PERSONALIZATION MODELS ───────────────────────────────────────────
+
+class EmployeeProfile(db.Model):
+    __tablename__ = "employee_profile"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), unique=True, nullable=False)
+    designation = db.Column(db.String(150), default="")
+    department = db.Column(db.String(150), default="")
+    organization = db.Column(db.String(150), default="")
+    work_domain = db.Column(db.String(150), default="")
+    current_assignment = db.Column(db.Text, default="")
+    experience_years = db.Column(db.Float, default=0)
+    education = db.Column(db.String(250), default="")
+    preferred_language = db.Column(db.String(30), default="English")
+    learning_goal = db.Column(db.Text, default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Competency(db.Model):
+    __tablename__ = "competency"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), unique=True, nullable=False)
+    category = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, default="")
+
+
+class EmployeeCompetency(db.Model):
+    __tablename__ = "employee_competency"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    competency_id = db.Column(db.Integer, db.ForeignKey("competency.id"), nullable=False)
+    current_level = db.Column(db.Float, default=0)
+    required_level = db.Column(db.Float, default=3)
+    last_assessed = db.Column(db.DateTime, nullable=True)
+    competency = db.relationship("Competency", backref="employee_competencies")
+
+
+class Course(db.Model):
+    __tablename__ = "course"
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(250), nullable=False)
+    provider = db.Column(db.String(100), default="iGOT")
+    category = db.Column(db.String(100), default="")
+    competency = db.Column(db.String(150), default="")
+    level = db.Column(db.String(50), default="Beginner")
+    description = db.Column(db.Text, default="")
+    duration_hours = db.Column(db.Float, default=2)
+    url = db.Column(db.String(500), default="#")
+    active = db.Column(db.Boolean, default=True)
+
+
+class LearningProgress(db.Model):
+    __tablename__ = "learning_progress"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    course_id = db.Column(db.Integer, db.ForeignKey("course.id"), nullable=False)
+    progress = db.Column(db.Float, default=0)
+    last_score = db.Column(db.Float, nullable=True)
+    completed = db.Column(db.Boolean, default=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    course = db.relationship("Course", backref="learning_progress")
+
+
+class AssessmentResult(db.Model):
+    __tablename__ = "assessment_result"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    competency_id = db.Column(db.Integer, db.ForeignKey("competency.id"), nullable=False)
+    score = db.Column(db.Float, default=0)
+    total_questions = db.Column(db.Integer, default=0)
+    assessed_level = db.Column(db.Float, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    competency = db.relationship("Competency", backref="assessment_results")
+
+
 # ── FIX: Create tables at module load so gunicorn workers find them ───────────
 # Previously db.create_all() was only inside `if __name__ == "__main__"`
 # which gunicorn NEVER executes → tables never created → OperationalError.
+def seed_competencies():
+    data = [
+        ("Survey Design", "Statistical", "Design and methodology of statistical surveys."),
+        ("Sampling Methods", "Statistical", "Sampling techniques and statistical sampling design."),
+        ("Official Statistics", "Statistical", "Concepts and practices related to official statistics."),
+        ("Data Quality", "Statistical", "Statistical data validation, quality and metadata."),
+        ("Labour Statistics", "Statistical", "Concepts and methods used in labour statistics."),
+        ("Time Series Analysis", "Statistical", "Analysis of time-dependent data."),
+        ("Python", "Technical", "Python programming for statistical and data analysis."),
+        ("SQL", "Technical", "Database querying and statistical data extraction."),
+        ("R Programming", "Technical", "R programming for statistics and data analysis."),
+        ("Data Visualization", "Technical", "Visualization and communication of statistical data."),
+        ("GIS", "Technical", "Geospatial information systems and spatial analysis."),
+        ("Artificial Intelligence", "Technical", "AI concepts and applications in official statistics."),
+        ("Machine Learning", "Technical", "Machine learning methods for statistical applications."),
+        ("Big Data Analytics", "Technical", "Processing and analysis of large datasets."),
+        ("Cloud Computing", "Technical", "Cloud technologies and scalable data processing."),
+        ("Cybersecurity", "Digital Governance", "Cybersecurity principles for government systems."),
+        ("Data Privacy", "Digital Governance", "Data protection and privacy principles."),
+        ("Digital Governance", "Digital Governance", "Digital transformation and governance concepts."),
+        ("API Integration", "Digital Governance", "Design and consumption of secure APIs."),
+        ("Leadership", "Behavioral", "Leadership and team management."),
+        ("Communication", "Behavioral", "Professional communication and presentation."),
+        ("Decision Making", "Behavioral", "Evidence-based decision making."),
+    ]
+    for name, category, description in data:
+        if not Competency.query.filter_by(name=name).first():
+            db.session.add(Competency(name=name, category=category, description=description))
+
+
+def seed_courses():
+    data = [
+        ("SQL for Statistical Data Analysis", "iGOT", "Technical", "SQL", "Intermediate", "SQL concepts for querying and analysing statistical datasets.", 8),
+        ("Python for Data Analysis", "iGOT", "Technical", "Python", "Beginner", "Python fundamentals for statistical and data analysis.", 10),
+        ("GIS Fundamentals", "iGOT", "Technical", "GIS", "Beginner", "Introduction to GIS, spatial data and geographical analysis.", 8),
+        ("Artificial Intelligence for Government", "iGOT", "Technical", "Artificial Intelligence", "Beginner", "Introduction to AI applications in government.", 6),
+        ("Machine Learning for Data Analysis", "NSSTA", "Technical", "Machine Learning", "Intermediate", "Machine learning methods for statistical data analysis.", 12),
+        ("Data Visualization for Official Statistics", "NSSTA", "Technical", "Data Visualization", "Intermediate", "Visual communication of official statistical information.", 6),
+        ("Survey Sampling Methods", "NSSTA", "Statistical", "Sampling Methods", "Intermediate", "Sampling methods used in official statistical surveys.", 10),
+    ]
+    for title, provider, category, competency, level, description, hours in data:
+        if not Course.query.filter_by(title=title).first():
+            db.session.add(Course(title=title, provider=provider, category=category, competency=competency, level=level, description=description, duration_hours=hours))
+
+
 with app.app_context():
     db.create_all()
+    seed_competencies()
+    seed_courses()
+    db.session.commit()
 
 
 # ── SESSION HELPERS ───────────────────────────────────────────────────────────
@@ -1139,10 +1264,237 @@ def app_home():
     return render_template("dashboard.html")
 
 
+def _current_user_required():
+    return getattr(g, "user", None)
+
+
+def calculate_gap(current, required):
+    return max(0.0, float(required or 0) - float(current or 0))
+
+
+def gap_priority(gap):
+    if gap >= 2.5:
+        return "Critical"
+    if gap >= 1.5:
+        return "High"
+    if gap >= 0.75:
+        return "Medium"
+    return "Low"
+
+
+def recommendation_score(gap, role_relevance=0.8, semantic_similarity=0.75, learning_history=0.5):
+    gap_score = min(max(gap, 0) / 5, 1)
+    return round((0.40 * gap_score + 0.30 * role_relevance + 0.20 * semantic_similarity + 0.10 * learning_history) * 100, 2)
+
+
+def generate_personalized_recommendations(user_id):
+    skills = EmployeeCompetency.query.filter_by(user_id=user_id).all()
+    recommendations = []
+    for skill in skills:
+        gap = calculate_gap(skill.current_level, skill.required_level)
+        if gap <= 0:
+            continue
+        courses = Course.query.filter_by(active=True, competency=skill.competency.name).all()
+        for course in courses:
+            score = recommendation_score(gap)
+            recommendations.append({
+                "course": course,
+                "competency": skill.competency.name,
+                "gap": round(gap, 2),
+                "priority": gap_priority(gap),
+                "score": score,
+                "reason": f"Your current {skill.competency.name} competency is {skill.current_level:.1f}/5 versus a required {skill.required_level:.1f}/5 for your profile."
+            })
+    recommendations.sort(key=lambda x: x["score"], reverse=True)
+    return recommendations[:6]
+
+
+@app.route("/profile", methods=["GET", "POST"])
+def employee_profile():
+    if not _current_user_required():
+        return redirect(url_for("auth_page"))
+    profile = EmployeeProfile.query.filter_by(user_id=g.user.id).first()
+    if request.method == "POST":
+        if not profile:
+            profile = EmployeeProfile(user_id=g.user.id)
+            db.session.add(profile)
+        profile.designation = (request.form.get("designation") or "").strip()
+        profile.department = (request.form.get("department") or "").strip()
+        profile.organization = (request.form.get("organization") or "").strip()
+        profile.work_domain = (request.form.get("work_domain") or "").strip()
+        profile.current_assignment = (request.form.get("current_assignment") or "").strip()
+        profile.education = (request.form.get("education") or "").strip()
+        profile.learning_goal = (request.form.get("learning_goal") or "").strip()
+        profile.preferred_language = (request.form.get("preferred_language") or "English").strip()
+        try:
+            profile.experience_years = max(0, float(request.form.get("experience_years") or 0))
+        except ValueError:
+            profile.experience_years = 0
+        db.session.commit()
+        return redirect(url_for("dashboard"))
+    return render_template("profile.html", profile=profile)
+
+
+@app.route("/skills", methods=["GET", "POST"])
+def employee_skills():
+    if not _current_user_required():
+        return redirect(url_for("auth_page"))
+    competencies = Competency.query.order_by(Competency.category, Competency.name).all()
+    if request.method == "POST":
+        for competency in competencies:
+            try:
+                current_level = float(request.form.get(f"skill_{competency.id}") or 0)
+            except ValueError:
+                current_level = 0
+            try:
+                required_level = float(request.form.get(f"required_{competency.id}") or 3)
+            except ValueError:
+                required_level = 3
+            record = EmployeeCompetency.query.filter_by(user_id=g.user.id, competency_id=competency.id).first()
+            if not record:
+                record = EmployeeCompetency(user_id=g.user.id, competency_id=competency.id)
+                db.session.add(record)
+            record.current_level = max(0, min(5, current_level))
+            record.required_level = max(0, min(5, required_level))
+            record.last_assessed = datetime.utcnow()
+        db.session.commit()
+        return redirect(url_for("dashboard"))
+    existing = {x.competency_id: x for x in EmployeeCompetency.query.filter_by(user_id=g.user.id).all()}
+    return render_template("skills.html", competencies=competencies, existing=existing)
+
+
+@app.route("/learning")
+def learning_plan():
+    if not _current_user_required():
+        return redirect(url_for("auth_page"))
+    recommendations = generate_personalized_recommendations(g.user.id)
+    progress = LearningProgress.query.filter_by(user_id=g.user.id).order_by(LearningProgress.updated_at.desc()).all()
+    return render_template("learning_plan.html", recommendations=recommendations, progress=progress)
+
+
+@app.route("/course/<int:course_id>/start", methods=["POST"])
+def start_course(course_id):
+    if not _current_user_required():
+        return jsonify({"status": "error", "error": "Login required"}), 401
+    course = db.session.get(Course, course_id)
+    if not course:
+        return jsonify({"status": "error", "error": "Course not found"}), 404
+    item = LearningProgress.query.filter_by(user_id=g.user.id, course_id=course.id).first()
+    if not item:
+        item = LearningProgress(user_id=g.user.id, course_id=course.id, progress=5)
+        db.session.add(item)
+    else:
+        item.progress = max(item.progress or 0, 5)
+    db.session.commit()
+    return redirect(url_for("learning_plan"))
+
+
+@app.route("/progress")
+def progress_page():
+    if not _current_user_required():
+        return redirect(url_for("auth_page"))
+    competencies = EmployeeCompetency.query.filter_by(user_id=g.user.id).all()
+    progress = LearningProgress.query.filter_by(user_id=g.user.id).order_by(LearningProgress.updated_at.desc()).all()
+    assessments = AssessmentResult.query.filter_by(user_id=g.user.id).order_by(AssessmentResult.created_at.desc()).all()
+    return render_template("progress.html", competencies=competencies, progress=progress, assessments=assessments)
+
+
+ASSESSMENT_BANK = {
+    "SQL": [
+        ("Which SQL clause filters rows before grouping?", ["WHERE", "HAVING", "ORDER BY", "GROUP BY"], "WHERE"),
+        ("Which command retrieves data from a table?", ["SELECT", "INSERT", "UPDATE", "DELETE"], "SELECT"),
+        ("Which key uniquely identifies a row?", ["Primary key", "Foreign key", "Index only", "View"], "Primary key"),
+        ("Which clause sorts query results?", ["ORDER BY", "SORT", "GROUP BY", "ARRANGE"], "ORDER BY"),
+        ("Which function counts rows?", ["COUNT()", "TOTAL()", "ROWS()", "NUMBER()"], "COUNT()"),
+    ],
+    "Python": [
+        ("Which keyword defines a function?", ["def", "func", "function", "define"], "def"),
+        ("Which structure stores key-value pairs?", ["List", "Tuple", "Dictionary", "Set"], "Dictionary"),
+        ("Which library is widely used for tabular data?", ["Pandas", "Flask", "Requests", "Pillow"], "Pandas"),
+        ("What does len() return?", ["Length/size", "Type", "Memory address", "Hash only"], "Length/size"),
+        ("Which symbol starts a Python comment?", ["#", "//", "--", "/*"], "#"),
+    ],
+    "GIS": [
+        ("What does GIS stand for?", ["Geographic Information System", "Global Image Service", "Graphical Internet System", "Geometric Index Search"], "Geographic Information System"),
+        ("Which data represents points, lines and polygons?", ["Vector", "Raster", "Audio", "Tabular only"], "Vector"),
+        ("Raster data is organized primarily as what?", ["Cells/pixels", "Vertices only", "Rows of text", "Edges only"], "Cells/pixels"),
+        ("A coordinate reference system primarily defines what?", ["How locations are represented on Earth", "File compression", "Database password", "Image brightness"], "How locations are represented on Earth"),
+        ("Which operation combines nearby features based on distance?", ["Buffer", "Compile", "Hash", "Tokenize"], "Buffer"),
+    ],
+    "Machine Learning": [
+        ("Which task predicts a continuous value?", ["Regression", "Classification", "Clustering", "Association"], "Regression"),
+        ("Which method is used to reduce overfitting?", ["Regularization", "Data leakage", "Removing validation", "Increasing noise"], "Regularization"),
+        ("Which metric is common for binary classification?", ["F1-score", "MSE only", "MAE only", "RMSE only"], "F1-score"),
+        ("What is a validation set used for?", ["Model selection/tuning", "Final reporting only", "Storing passwords", "Database joins"], "Model selection/tuning"),
+        ("What does overfitting mean?", ["Good training fit but poor generalization", "Poor training and test fit", "No model", "Only missing data"], "Good training fit but poor generalization"),
+    ],
+}
+
+
+@app.route("/assessment/by-name/<path:name>")
+def assessment_by_name(name):
+    competency = Competency.query.filter_by(name=name).first()
+    if not competency:
+        return redirect(url_for("dashboard"))
+    return redirect(url_for("assessment", competency_id=competency.id))
+
+
+@app.route("/assessment/<int:competency_id>", methods=["GET", "POST"])
+def assessment(competency_id):
+    if not g.user:
+        return redirect(url_for("auth_page"))
+    competency = db.session.get(Competency, competency_id)
+    if not competency:
+        return redirect(url_for("dashboard"))
+    questions = ASSESSMENT_BANK.get(competency.name, [
+        (f"Which statement best describes {competency.name}?", ["Core professional competency", "Unrelated activity", "A file format", "A password"], "Core professional competency"),
+        (f"Why is {competency.name} relevant to an employee?", ["It supports role performance", "It is always irrelevant", "It replaces every other skill", "It is only for entertainment"], "It supports role performance"),
+        (f"How should {competency.name} be improved?", ["Practice and assessment", "Never use it", "Avoid feedback", "Ignore requirements"], "Practice and assessment"),
+        (f"What is a good way to measure {competency.name}?", ["Performance-based assessment", "Guessing", "No measurement", "Random selection"], "Performance-based assessment"),
+        (f"What should an employee do after an assessment?", ["Review weaknesses and learn", "Ignore the result", "Delete all progress", "Stop learning"], "Review weaknesses and learn"),
+    ])
+    if request.method == "POST":
+        correct = 0
+        for i, q in enumerate(questions):
+            if request.form.get(f"q{i}") == q[2]:
+                correct += 1
+        total = len(questions)
+        score = round((correct / total) * 100, 1) if total else 0
+        record = EmployeeCompetency.query.filter_by(user_id=g.user.id, competency_id=competency.id).first()
+        if not record:
+            record = EmployeeCompetency(user_id=g.user.id, competency_id=competency.id, current_level=0, required_level=3)
+            db.session.add(record)
+        # Evidence-based incremental update: a perfect assessment can add up to 0.5 level.
+        improvement = round((score / 100) * 0.5, 2)
+        record.current_level = min(5, round((record.current_level or 0) + improvement, 2))
+        record.last_assessed = datetime.utcnow()
+        db.session.add(AssessmentResult(user_id=g.user.id, competency_id=competency.id, score=score, total_questions=total, assessed_level=record.current_level))
+        db.session.commit()
+        return render_template("assessment_result.html", competency=competency, score=score, correct=correct, total=total, new_level=record.current_level)
+    return render_template("assessment.html", competency=competency, questions=questions)
+
+
 @app.route("/dashboard")
 def dashboard():
     ex_name = Path(EXAMPLE_PATH).name if EXAMPLE_PATH else ""
-    return render_template("dashboard.html", example_name=ex_name)
+    if not g.user:
+        return render_template("dashboard.html", example_name=ex_name, profile=None, competencies=[], skill_gaps=[], recommendations=[], progress=[], assessments=[], overall_score=0, completed_courses=0)
+    profile = EmployeeProfile.query.filter_by(user_id=g.user.id).first()
+    competencies = EmployeeCompetency.query.filter_by(user_id=g.user.id).all()
+    skill_gaps = []
+    for item in competencies:
+        gap = calculate_gap(item.current_level, item.required_level)
+        if gap > 0:
+            skill_gaps.append({"name": item.competency.name, "category": item.competency.category, "current": item.current_level, "required": item.required_level, "gap": round(gap, 2), "priority": gap_priority(gap)})
+    skill_gaps.sort(key=lambda x: x["gap"], reverse=True)
+    total_current = sum(x.current_level or 0 for x in competencies)
+    total_required = sum(x.required_level or 0 for x in competencies)
+    overall_score = round((total_current / total_required) * 100) if total_required else 0
+    recommendations = generate_personalized_recommendations(g.user.id)
+    progress = LearningProgress.query.filter_by(user_id=g.user.id).order_by(LearningProgress.updated_at.desc()).limit(5).all()
+    assessments = AssessmentResult.query.filter_by(user_id=g.user.id).order_by(AssessmentResult.created_at.desc()).limit(5).all()
+    completed_courses = LearningProgress.query.filter_by(user_id=g.user.id, completed=True).count()
+    return render_template("dashboard.html", example_name=ex_name, profile=profile, competencies=competencies, skill_gaps=skill_gaps[:6], recommendations=recommendations, progress=progress, assessments=assessments, overall_score=overall_score, completed_courses=completed_courses)
 
 
 @app.route("/study", methods=["GET"])
@@ -1182,9 +1534,3 @@ def server_error(e):
 @app.context_processor
 def inject_user():
     return dict(current_user=getattr(g, "user", None))
-
-
-# ── ENTRYPOINT ────────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    app.run("0.0.0.0", port=port, debug=False)
