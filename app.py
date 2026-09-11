@@ -1735,8 +1735,13 @@ def not_found(e):
 
 
 @app.errorhandler(500)
+@app.errorhandler(500)
 def server_error(e):
-    return jsonify({"status": "error", "error": "Internal server error"}), 500
+    current_app.logger.exception("INTERNAL SERVER ERROR")
+    return jsonify({
+        "status": "error",
+        "error": str(e)
+    }), 500
 @app.context_processor
 def inject_user():
     return dict(current_user=getattr(g, "user", None))
