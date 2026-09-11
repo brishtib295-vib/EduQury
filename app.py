@@ -1490,27 +1490,139 @@ def assessment(competency_id):
 @app.route("/dashboard")
 def dashboard():
     ex_name = Path(EXAMPLE_PATH).name if EXAMPLE_PATH else ""
+
     if not g.user:
-        return render_template("dashboard.html", example_name=ex_name, profile=None, competencies=[], skill_gaps=[], recommendations=[], progress=[], assessments=[], overall_score=0, completed_courses=0)
-    profile = EmployeeProfile.query.filter_by(user_id=g.user.id).first()
-    competencies = EmployeeCompetency.query.filter_by(user_id=g.user.id).all()
+        return render_template(
+            "dashboard.html",
+            example_name=ex_name,
+            profile=None,
+            competencies=[],
+            skill_gaps=[],
+            recommendations=[],
+            progress=[],
+            assessments=[],
+            overall_score=0,
+            completed_courses=0,
+            total_courses=0,
+            progress_percentage=0,
+            remaining_percentage=100
+        )
+
+    # Get the logged-in user's profile
+    profile = EmployeeProfile.query.filter_by(
+        user_id=g.user.id
+    ).first()
+
+    # Get only this user's competencies
+    competencies = EmployeeCompetency.query.filter_by(
+        user_id=g.user.id
+    ).all()
+
+    # Calculate skill gaps
     skill_gaps = []
+
     for item in competencies:
-        gap = calculate_gap(item.current_level, item.required_level)
+        gap = calculate_gap(
+            item.current_level,
+            item.required_level
+        )
+
         if gap > 0:
-            skill_gaps.append({"name": item.competency.name, "category": item.competency.category, "current": item.current_level, "required": item.required_level, "gap": round(gap, 2), "priority": gap_priority(gap)})
-    skill_gaps.sort(key=lambda x: x["gap"], reverse=True)
-    total_current = sum(x.current_level or 0 for x in competencies)
-    total_required = sum(x.required_level or 0 for x in competencies)
-    overall_score = round((total_current / total_required) * 100) if total_required else 0
-    recommendations = generate_personalized_recommendations(g.user.id)
-    progress = LearningProgress.query.filter_by(user_id=g.user.id).order_by(LearningProgress.updated_at.desc()).limit(5).all()
-    assessments = AssessmentResult.query.filter_by(user_id=g.user.id).order_by(AssessmentResult.created_at.desc()).limit(5).all()
-    completed_courses = LearningProgress.query.filter_by(user_id=g.user.id, completed=True).count()
-    return render_template("dashboard.html", example_name=ex_name, profile=profile, competencies=competencies, skill_gaps=skill_gaps[:6], recommendations=recommendations, progress=progress, assessments=assessments, overall_score=overall_score, completed_courses=completed_courses)
+            skill_gaps.append({
+                "name": item.competency.name,
+                "category": item.competency.category,
+                "current": item.current_level,
+                "required": item.required_level,
+                "gap": round(gap, 2),
+                "priority": gap_priority(gap)
+            })
 
+    skill_gaps.sort(
+        key=lambda x: x["gap"],
+        reverse=True
+    )
 
-@app.route("/study", methods=["GET"])
+    # Overall competency score
+    total_current = sum(
+        x.current_level or 0
+        for x in competencies
+    )
+
+    total_required = sum(
+        x.required_level or 0
+        for x in competencies
+    )
+
+    overall_score = (
+        round((total_current / total_required) * 100)
+        if total_required
+        else 0
+    )
+
+    # Personalized recommendations
+    recommendations = generate_personalized_recommendations(
+        g.user.id
+    )
+
+    # Get ONLY the logged-in user's learning progress
+    all_progress = LearningProgress.query.filter_by(
+        user_id=g.user.id
+    ).all()
+
+    # Recent learning activity
+    progress = LearningProgress.query.filter_by(
+        user_id=g.user.id
+    ).order_by(
+        LearningProgress.updated_at.desc()
+    ).limit(5).all()
+
+    # Recent assessments
+    assessments = AssessmentResult.query.filter_by(
+        user_id=g.user.id
+    ).order_by(
+        AssessmentResult.created_at.desc()
+    ).limit(5).all()
+
+    # Number of courses belonging to this user
+    total_courses = len(all_progress)
+
+    # Number of completed courses belonging to this user
+    completed_courses = sum(
+        1 for item in all_progress
+        if item.completed
+    )
+
+    # Calculate overall learning progress
+    if total_courses > 0:
+        progress_percentage = round(
+            sum(
+                min(max(item.progress or 0, 0), 100)
+                for item in all_progress
+            ) / total_courses
+        )
+    else:
+        progress_percentage = 0
+
+    remaining_percentage = max(
+        100 - progress_percentage,
+        0
+    )
+
+    return render_template(
+        "dashboard.html",
+        example_name=ex_name,
+        profile=profile,
+        competencies=competencies,
+        skill_gaps=skill_gaps[:6],
+        recommendations=recommendations,
+        progress=progress,
+        assessments=assessments,
+        overall_score=overall_score,
+        completed_courses=completed_courses,
+        total_courses=total_courses,
+        progress_percentage=progress_percentage,
+        remaining_percentage=remaining_percentage
+    )
 def study_page():
     ex_name = Path(EXAMPLE_PATH).name if EXAMPLE_PATH else ""
     return render_template("study.html", example_name=ex_name, active="study")
